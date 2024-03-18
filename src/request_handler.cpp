@@ -46,6 +46,10 @@ void RequestHandler::addFileHeaderHandler(const addFileHeaderCallback &cb) {
 }
 
 void RequestHandler::handleRequest(unsigned connectionId, const Request &req, Reply &rep) {
+    for (const auto &header : req.headers_) {
+        std::cout << header.name_ << " " << header.value_ << std::endl;
+    }
+
     // initiate filePath with requestPath
     rep.filePath_ = req.requestPath_;
 

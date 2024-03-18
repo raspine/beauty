@@ -36,18 +36,24 @@ void Connection::doRead() {
                 std::tie(result, std::ignore) = requestParser_.parse(
                     request_, buffer_.data(), buffer_.data() + bytes_transferred);
 
+                std::cout << "reading" << std::endl;
                 if (result == RequestParser::good) {
+                    std::cout << "good" << std::endl;
                     if (requestDecoder_.decodeRequest(request_)) {
+                        std::cout << "decoded OK" << std::endl;
                         requestHandler_.handleRequest(connectionId_, request_, reply_);
                         doWriteHeaders();
                     } else {
+                        std::cout << "decoded fail" << std::endl;
                         reply_ = Reply::stockReply(Reply::bad_request);
                         doWriteHeaders();
                     }
                 } else if (result == RequestParser::bad) {
+                    std::cout << "bad" << std::endl;
                     reply_ = Reply::stockReply(Reply::bad_request);
                     doWriteHeaders();
                 } else {
+                    std::cout << "indeterminte" << std::endl;
                     doRead();
                 }
             } else if (ec != asio::error::operation_aborted) {
