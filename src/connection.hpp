@@ -28,7 +28,8 @@ class Connection : public std::enable_shared_from_this<Connection> {
     explicit Connection(asio::ip::tcp::socket socket,
                         ConnectionManager &manager,
                         RequestHandler &handler,
-                        unsigned connectionId);
+                        unsigned connectionId,
+                        size_t maxContentSize);
 
     // Start the first asynchronous operation for the connection.
     void start();
@@ -58,7 +59,7 @@ class Connection : public std::enable_shared_from_this<Connection> {
     RequestHandler &requestHandler_;
 
     // Buffer for incoming data.
-    std::array<char, 8192> buffer_;
+    std::array<char, 4096> buffer_;
 
     // The incoming request.
     Request request_;

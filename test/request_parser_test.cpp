@@ -11,6 +11,7 @@ using namespace http::server;
 namespace {
 
 struct RequestFixture {
+    RequestFixture() : request(1024) {}
     RequestParser::result_type parse(const std::string &text) {
         RequestParser parser;
 
@@ -42,7 +43,7 @@ TEST_CASE("parse GET request", "[request_parser]") {
         const char *text = "GET /uri HTTP/0.9\r\n\r\n";
         auto result = fixture.parse(text);
 
-        REQUIRE(result == RequestParser::good);
+        REQUIRE(result == RequestParser::good_complete);
 
         REQUIRE(fixture.request.method_ == "GET");
         REQUIRE(fixture.request.uri_ == "/uri");
@@ -53,7 +54,7 @@ TEST_CASE("parse GET request", "[request_parser]") {
         const char *text = "GET /uri HTTP/1.0\r\n\r\n";
         auto result = fixture.parse(text);
 
-        REQUIRE(result == RequestParser::good);
+        REQUIRE(result == RequestParser::good_complete);
 
         REQUIRE(fixture.request.method_ == "GET");
         REQUIRE(fixture.request.uri_ == "/uri");
@@ -65,7 +66,7 @@ TEST_CASE("parse GET request", "[request_parser]") {
         const char *text = "GET /uri HTTP/1.1\r\n\r\n";
         auto result = fixture.parse(text);
 
-        REQUIRE(result == RequestParser::good);
+        REQUIRE(result == RequestParser::good_complete);
 
         REQUIRE(fixture.request.method_ == "GET");
         REQUIRE(fixture.request.uri_ == "/uri");
@@ -77,7 +78,7 @@ TEST_CASE("parse GET request", "[request_parser]") {
         const char *text = "GET /uri?arg1=test&arg1=%20%21&arg3=test\r\n\r\n";
         auto result = fixture.parse(text);
 
-        REQUIRE(result == RequestParser::good);
+        REQUIRE(result == RequestParser::good_complete);
 
         REQUIRE(fixture.request.method_ == "GET");
         REQUIRE(fixture.request.uri_ == "/uri?arg1=test&arg1=%20%21&arg3=test");
@@ -90,7 +91,7 @@ TEST_CASE("parse POST request", "[request_parser]") {
         const char *text = "POST /uri HTTP/1.1\r\n\r\n";
         auto result = fixture.parse(text);
 
-        REQUIRE(result == RequestParser::good);
+        REQUIRE(result == RequestParser::good_complete);
 
         REQUIRE(fixture.request.method_ == "POST");
         REQUIRE(fixture.request.uri_ == "/uri");
@@ -105,7 +106,7 @@ TEST_CASE("parse POST request", "[request_parser]") {
             "\r\n";
         auto result = fixture.parse(text);
 
-        REQUIRE(result == RequestParser::good);
+        REQUIRE(result == RequestParser::good_complete);
 
         REQUIRE(fixture.request.headers_.size() == 1);
         REQUIRE(fixture.request.headers_[0].name_ == "X-Custom-Header");
@@ -126,7 +127,7 @@ TEST_CASE("parse POST request", "[request_parser]") {
 
         auto result = fixture.parse(text);
 
-        REQUIRE(result == RequestParser::good);
+        REQUIRE(result == RequestParser::good_complete);
 
         REQUIRE(fixture.request.headers_.size() == 6);
         REQUIRE(fixture.request.headers_[0].name_ == "From");

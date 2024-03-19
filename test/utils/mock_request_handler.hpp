@@ -11,7 +11,7 @@ namespace server {
 
 class MockRequestHandler {
    public:
-    MockRequestHandler() = default;
+    MockRequestHandler();
     virtual ~MockRequestHandler() = default;
 
     void handleRequest(const Request& req, Reply& rep);

@@ -17,7 +17,7 @@ class RequestParser {
     void reset();
 
     // Result of parse.
-    enum result_type { good, bad, indeterminate };
+    enum result_type { good_complete, good_part, bad, indeterminate };
 
     // Parse some data. The enum return value is good when a complete request
     // has been parsed, bad if the data is invalid, indeterminate when more
@@ -29,7 +29,7 @@ class RequestParser {
                                                  InputIterator end) {
         while (begin != end) {
             result_type result = consume(req, *begin++);
-            if (result == good || result == bad)
+            if (result != indeterminate)
                 return std::make_tuple(result, begin);
         }
         return std::make_tuple(indeterminate, begin);

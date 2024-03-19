@@ -12,6 +12,7 @@ namespace server {
 
 // A request received from a client.
 struct Request {
+    Request(size_t maxContentSize) : maxContentSize_(maxContentSize) {}
     std::string method_;
     std::string uri_;
     int httpVersionMajor_ = 0;
@@ -68,6 +69,8 @@ struct Request {
     bool iequals(const std::string &a, const std::string &b) const {
         return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), ichar_equals);
     }
+
+    size_t maxContentSize_;
 };
 
 }  // namespace server

@@ -48,7 +48,7 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
             } else if (input == '\r') {
                 req.httpVersionMajor_ = 0;
                 req.httpVersionMinor_ = 9;
-                return good;
+                return good_complete;
             } else if (isCtl(input)) {
                 return bad;
             } else {
@@ -227,7 +227,7 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
                 state_ = chunk_size;
             } else if (bodySize_ == 0) {
                 if (input == '\n') {
-                    return good;
+                    return good_complete;
                 } else {
                     return bad;
                 }
@@ -240,7 +240,7 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
             --bodySize_;
             req.body_.push_back(input);
             if (bodySize_ == 0) {
-                return good;
+                return good_complete;
             }
             return indeterminate;
         case chunk_size:
@@ -300,7 +300,7 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
             return indeterminate;
         case chunk_size_newline_3:
             if (input == '\n') {
-                return good;
+                return good_complete;
             } else {
                 return bad;
             }

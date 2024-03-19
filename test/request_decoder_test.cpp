@@ -19,7 +19,7 @@ using namespace http::server;
 
 TEST_CASE("error handling", "[request_parser]") {
     RequestDecoder reqDecoder;
-    Request req;
+    Request req(1024);
 
     SECTION("it should false for invalid path") {
         req.uri_ =
@@ -32,7 +32,11 @@ TEST_CASE("error handling", "[request_parser]") {
 
 TEST_CASE("decode GET request", "[request_decoder]") {
     RequestDecoder reqDecoder;
-    Request getRequest = {"GET", "/file.bin?myKey=my%20value", 1, 1, {}, {}, false, "", {}, {}};
+    Request getRequest(1024);
+    getRequest.method_ = "GET";
+    getRequest.uri_ = "/file.bin?myKey=my%20value";
+    getRequest.httpVersionMajor_ = 1;
+    getRequest.httpVersionMinor_ = 1;
 
     SECTION("it should provide correct request path") {
         REQUIRE(reqDecoder.decodeRequest(getRequest) == true);
@@ -48,7 +52,12 @@ TEST_CASE("decode GET request", "[request_decoder]") {
 
 TEST_CASE("decode POST request", "[request_decoder]") {
     RequestDecoder reqDecoder;
-    Request postRequest = {"POST", "/uri.cgi", 1, 1, {}, {}, false, "", {}, {}};
+    Request postRequest(1024);
+    postRequest.method_ = "POST";
+    postRequest.uri_ = "/uri.cgi";
+    postRequest.httpVersionMajor_ = 1;
+    postRequest.httpVersionMinor_ = 1;
+
     postRequest.headers_.push_back({"Host", "127.0.0.1"});
     postRequest.headers_.push_back({"Accept", "*/*"});
     postRequest.headers_.push_back({"Content-Type", "application/x-www-form-urlencoded"});

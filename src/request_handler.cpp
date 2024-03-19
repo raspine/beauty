@@ -14,7 +14,6 @@ namespace http {
 namespace server {
 
 namespace {
-const size_t MaxChunkSize = 1024;
 
 void defaultFileNotFoundHandler(Reply &rep) {
     rep = Reply::stockReply(Reply::not_found);
@@ -83,10 +82,10 @@ void RequestHandler::handleRequest(unsigned connectionId, const Request &req, Re
             }
 
             // fill initial content
-            rep.useChunking_ = contentSize > MaxChunkSize;
+            rep.replyPartial_ = contentSize > rep.maxContentSize_;
             rep.status_ = Reply::ok;
             readChunkFromFile(connectionId, rep);
-            if (!rep.useChunking_) {
+            if (!rep.replyPartial_) {
                 // all data fits in initial content
                 fileHandler_->closeFile(connectionId);
             }
@@ -107,8 +106,8 @@ void RequestHandler::handleRequest(unsigned connectionId, const Request &req, Re
 void RequestHandler::handleChunk(unsigned connectionId, Reply &rep) {
     size_t nrReadBytes = readChunkFromFile(connectionId, rep);
 
-    if (nrReadBytes < MaxChunkSize) {
-        rep.finalChunk_ = true;
+    if (nrReadBytes < rep.maxContentSize_) {
+        rep.finalPart_ = true;
         fileHandler_->closeFile(connectionId);
     }
 }
@@ -120,7 +119,7 @@ void RequestHandler::closeFile(unsigned connectionId) {
 }
 
 size_t RequestHandler::readChunkFromFile(unsigned connectionId, Reply &rep) {
-    rep.content_.resize(MaxChunkSize);
+    rep.content_.resize(rep.maxContentSize_);
     int nrReadBytes =
         fileHandler_->readFile(connectionId, rep.content_.data(), rep.content_.size());
     rep.content_.resize(nrReadBytes);
