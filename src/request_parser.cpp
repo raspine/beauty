@@ -182,8 +182,9 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
                     Header &h = req.headers_.back();
 
                     if (strcasecmp(h.name_.c_str(), "Content-Length") == 0) {
-                        bodySize_ = atoi(h.value_.c_str());
-                        req.body_.reserve(bodySize_);
+                        req.bodySize_ = atoi(h.value_.c_str());
+                        contentSize_ = std::min(req.maxContentSize_, req.bodySize_);
+                        req.content_.reserve(contentSize_);
                     } else if (strcasecmp(h.name_.c_str(), "Transfer-Encoding") == 0) {
                         if (strcasecmp(h.value_.c_str(), "chunked") == 0) {
                             chunked_ = true;
@@ -225,7 +226,7 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
 
             if (chunked_) {
                 state_ = chunk_size;
-            } else if (bodySize_ == 0) {
+            } else if (contentSize_ == 0) {
                 if (input == '\n') {
                     return good_complete;
                 } else {
@@ -237,9 +238,12 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
             return indeterminate;
         }
         case post:
-            --bodySize_;
-            req.body_.push_back(input);
-            if (bodySize_ == 0) {
+            --contentSize_;
+            req.content_.push_back(input);
+            if (contentSize_ == 0) {
+                if (req.maxContentSize_ < req.bodySize_) {
+                    return good_part;
+                }
                 return good_complete;
             }
             return indeterminate;
@@ -278,7 +282,8 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
             if (input == '\n') {
                 chunkSize_ = strtol(chunkSizeStr_.c_str(), NULL, 16);
                 chunkSizeStr_.clear();
-                req.body_.reserve(req.body_.size() + chunkSize_);
+                // TODO: chunked request do not honor req.maxContentSize_
+                req.content_.reserve(req.content_.size() + chunkSize_);
 
                 if (chunkSize_ == 0) {
                     state_ = chunk_size_newline_2;
@@ -324,7 +329,7 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
             }
             return indeterminate;
         case chunk_data:
-            req.body_.push_back(input);
+            req.content_.push_back(input);
             if (--chunkSize_ == 0) {
                 state_ = chunk_data_newline_1;
             }

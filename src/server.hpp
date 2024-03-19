@@ -51,7 +51,7 @@ class Server {
     RequestHandler requestHandler_;
     // each connection gets a unique internal id
     unsigned connectionId_ = 0;
-	const size_t maxContentSize_;
+    const size_t maxContentSize_;
 };
 
 }  // namespace server

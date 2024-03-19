@@ -62,8 +62,8 @@ TEST_CASE("decode POST request", "[request_decoder]") {
     postRequest.headers_.push_back({"Accept", "*/*"});
     postRequest.headers_.push_back({"Content-Type", "application/x-www-form-urlencoded"});
     postRequest.headers_.push_back({"Content-Length", "21"});
-    postRequest.body_ = {'a', 'r', 'g', '1', '=', 't', 'e', 's', 't', '&', 'a',
-                         'r', 'g', '2', '=', '%', '2', '0', '%', '2', '1'};
+    postRequest.content_ = {'a', 'r', 'g', '1', '=', 't', 'e', 's', 't', '&', 'a',
+                            'r', 'g', '2', '=', '%', '2', '0', '%', '2', '1'};
 
     SECTION("it should provide correct form params") {
         REQUIRE(reqDecoder.decodeRequest(postRequest) == true);

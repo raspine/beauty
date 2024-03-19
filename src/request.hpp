@@ -12,15 +12,20 @@ namespace server {
 
 // A request received from a client.
 struct Request {
-    Request(size_t maxContentSize) : maxContentSize_(maxContentSize) {}
+    friend class RequestParser;
+
+    Request(size_t maxContentSize) : maxContentSize_(maxContentSize) {
+        content_.reserve(maxContentSize);
+    }
     std::string method_;
     std::string uri_;
     int httpVersionMajor_ = 0;
     int httpVersionMinor_ = 0;
     std::vector<Header> headers_;
-    std::vector<char> body_;
+    std::vector<char> content_;
     bool keepAlive_ = false;
     std::string requestPath_;
+    size_t bodySize_;
 
     // Parsed query params in the request
     std::vector<std::pair<std::string, std::string>> queryParams_;

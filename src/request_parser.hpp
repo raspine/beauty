@@ -29,8 +29,9 @@ class RequestParser {
                                                  InputIterator end) {
         while (begin != end) {
             result_type result = consume(req, *begin++);
-            if (result != indeterminate)
+            if (result != indeterminate) {
                 return std::make_tuple(result, begin);
+            }
         }
         return std::make_tuple(indeterminate, begin);
     }
@@ -88,7 +89,7 @@ class RequestParser {
         chunk_data
     } state_;
 
-    std::size_t bodySize_ = 0;
+    std::size_t contentSize_ = 0;
     std::string chunkSizeStr_;
     std::size_t chunkSize_ = 0;
     bool chunked_ = false;

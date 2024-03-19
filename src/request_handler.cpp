@@ -45,6 +45,14 @@ void RequestHandler::addFileHeaderHandler(const addFileHeaderCallback &cb) {
 }
 
 void RequestHandler::handleRequest(unsigned connectionId, const Request &req, Reply &rep) {
+    std::cout << std::endl;
+    std::cout << req.uri_ << std::endl;
+    std::cout << req.method_ << std::endl;
+    std::cout << "################# body size" << req.content_.size() << std::endl;
+    for (int i = 0; i < req.content_.size(); ++i) {
+        printf("%c", req.content_[i]);
+    }
+    puts("");
     for (const auto &header : req.headers_) {
         std::cout << header.name_ << " " << header.value_ << std::endl;
     }

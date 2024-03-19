@@ -11,7 +11,7 @@ using namespace http::server;
 namespace {
 
 struct RequestFixture {
-    RequestFixture() : request(1024) {}
+    RequestFixture(size_t maxContentSize) : request(maxContentSize) {}
     RequestParser::result_type parse(const std::string &text) {
         RequestParser parser;
 
@@ -32,7 +32,7 @@ std::vector<char> convertToCharVec(const std::string &s) {
 }  // namespace
 
 TEST_CASE("parse GET request", "[request_parser]") {
-    RequestFixture fixture;
+    RequestFixture fixture(1024);
     SECTION("should return false for misspelling") {
         const char *text = "GET /uri HTTTP/0.9\r\n\r\n";
         auto result = fixture.parse(text);
@@ -86,7 +86,7 @@ TEST_CASE("parse GET request", "[request_parser]") {
 }
 
 TEST_CASE("parse POST request", "[request_parser]") {
-    RequestFixture fixture;
+    RequestFixture fixture(1024);
     SECTION("should parse POST HTTP/1.1") {
         const char *text = "POST /uri HTTP/1.1\r\n\r\n";
         auto result = fixture.parse(text);
@@ -144,7 +144,7 @@ TEST_CASE("parse POST request", "[request_parser]") {
         REQUIRE(fixture.request.headers_[4].value_ == "application/x-www-form-urlencoded");
         REQUIRE(fixture.request.headers_[5].name_ == "Content-Length");
         REQUIRE(fixture.request.headers_[5].value_ == "31");
-        REQUIRE(fixture.request.body_ == convertToCharVec("arg1=test;arg1=%20%21;arg3=test"));
+        REQUIRE(fixture.request.content_ == convertToCharVec("arg1=test;arg1=%20%21;arg3=test"));
     }
     SECTION("should parse POST HTTP/1.1 with chunked body") {
         const char *text =
@@ -166,8 +166,9 @@ TEST_CASE("parse POST request", "[request_parser]") {
         REQUIRE(result == RequestParser::indeterminate);
 
         REQUIRE(fixture.request.headers_.size() == 2);
-        REQUIRE(fixture.request.body_ == convertToCharVec("This is the data in the first chunk and "
-                                                          "this is the second one consequence"));
+        REQUIRE(fixture.request.content_ ==
+                convertToCharVec("This is the data in the first chunk and "
+                                 "this is the second one consequence"));
     }
     SECTION("should parse POST HTTP/1.1 with chunked extension") {
         const char *text =
@@ -187,7 +188,36 @@ TEST_CASE("parse POST request", "[request_parser]") {
         REQUIRE(result == RequestParser::indeterminate);
 
         REQUIRE(fixture.request.headers_.size() == 2);
-        REQUIRE(fixture.request.body_ == convertToCharVec("This is the data in the first chunk and "
-                                                          "this is the second one"));
+        REQUIRE(fixture.request.content_ ==
+                convertToCharVec("This is the data in the first chunk and "
+                                 "this is the second one"));
     }
+}
+
+TEST_CASE("parse POST request partially", "[request_parser]") {
+    RequestFixture fixture(50);
+    const char *text =
+        "POST / HTTP/1.1\r\n"
+        "From: user@example.com\r\n"
+        "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36\r\n"
+        "Accept: */*\r\n"
+        "Accept-Encoding: gzip, deflate\r\n"
+        "Content-Type: multipart/form-data; "
+        "boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE\r\n"
+        "Content-Length: 281\r\n"
+        "\r\n"
+        "------WebKitFormBoundarylSu7ajtLodoq9XHE\r\n"
+        "Content-Disposition: form-data; name=\"file1\"; filename=\"testfile01.txt\"\r\n"
+        "Content-Type: text/plain\r\n"
+        "\r\n"
+        "This body is longer than 50 characters. So we expect request_parser to return "
+        "good_partial.\r\n"
+        "\r\n"
+        "------WebKitFormBoundarylSu7ajtLodoq9XHE--\r\n";
+
+    auto result = fixture.parse(text);
+    REQUIRE(result == RequestParser::good_part);
+    REQUIRE(fixture.request.content_ ==
+            convertToCharVec("------WebKitFormBoundarylSu7ajtLodoq9XHE\r\nContent-"));
 }

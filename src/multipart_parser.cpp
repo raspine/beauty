@@ -1,0 +1,329 @@
+#include "multipart_parser.hpp"
+
+#include <string.h>
+
+#include <algorithm>
+#include <iostream>
+
+namespace http {
+namespace server {
+
+MultiPartParser::MultiPartParser() : state_(expecting_hyphen_1) {}
+
+void MultiPartParser::reset() {
+    state_ = expecting_hyphen_1;
+    boundaryStr_.clear();
+    lastBuffer_.clear();
+    lastParts_.clear();
+}
+
+bool MultiPartParser::parseHeader(const Request &req) {
+    std::string contentTypeVal = req.getHeaderValue("Content-Type");
+    auto it = contentTypeVal.find("multipart");
+    if (it == std::string::npos) {
+        return false;
+    }
+    const std::string key = "boundary=";
+    std::size_t foundStart = contentTypeVal.find(key);
+    std::size_t foundEnd = contentTypeVal.find(";", foundStart + key.size());
+    if (foundStart != std::string::npos && foundEnd > foundStart) {
+        if (foundEnd == std::string::npos) {
+            boundaryStr_ = contentTypeVal.substr(foundStart + key.size());
+        } else {
+            boundaryStr_ =
+                contentTypeVal.substr(foundStart + key.size(), foundEnd - foundStart - key.size());
+        }
+    } else {
+        return false;
+    }
+    return true;
+}
+
+MultiPartParser::result_type MultiPartParser::parse(Request &req, std::deque<ContentPart> &parts) {
+    result_type result;
+    parts.clear();
+    for (size_t i = 0; i < req.content_.size(); ++i) {
+        result = consume(req, &req.content_[i], parts);
+        if (result != indeterminate) {
+            break;
+        }
+    }
+
+    if (result == bad) {
+        return result;
+    }
+
+    // if no filename_/start_/end_ was found in consume() it will not create
+    // a part, so must then assume we're in the middle of content somwhere and
+    // create a part
+    if (result == indeterminate && parts.empty()) {
+        parts.push_back(ContentPart());
+    }
+
+    // return the previous content (that have been adjusted below)
+    parts.swap(lastParts_);
+    req.content_.swap(lastBuffer_);
+
+    // make adjustments to the stored lastParts_ so they are correct when
+    // swapped out in the next call
+    bool containEndForPartToLeave = false;
+    for (auto &lastPart : lastParts_) {
+        // if start_ not found, assume buffer start
+        if (lastPart.start_ == nullptr) {
+            lastPart.start_ = &lastBuffer_[0];
+        }
+
+        // end_ (just like an iterator::end()) points to the character
+        // after the last character.
+        // If end_ not found assume buffer end.
+        if (lastPart.end_ == nullptr) {
+            lastPart.end_ = &lastBuffer_[lastBuffer_.size()];
+        } else {
+            // lastPart.end_ is assigned +1 char after boundary so:
+            // "boundary size" + 2*'-' + 2*clrf = 6
+            // gives the correct position.
+            lastPart.end_ = lastPart.end_ - boundaryStr_.size() - 6;
+            if (lastPart.end_ < lastPart.start_) {
+                // end was in the last part of the returned "parts".
+                // "Luckily" (actually the whole reason why we're having
+                // a lastPart/Buffer memory) we can adjust it here!
+                ContentPart &partToLeave = parts.back();
+                partToLeave.end_ = partToLeave.end_ - (lastPart.start_ - lastPart.end_);
+
+                // This part needs removing as it was created
+                // by consume() but only contained end_ for previous part.
+                containEndForPartToLeave = true;
+            }
+        }
+    }
+
+    if (containEndForPartToLeave) {
+        lastParts_.pop_front();
+    }
+
+    return result;
+}
+
+void MultiPartParser::flush(Request &req, std::deque<ContentPart> &parts) {
+    parts.swap(lastParts_);
+    req.content_.swap(lastBuffer_);
+}
+
+MultiPartParser::result_type MultiPartParser::consume(Request &req,
+                                                      char *inputPtr,
+                                                      std::deque<ContentPart> &parts) {
+    char input = *inputPtr;
+    switch (state_) {
+        case expecting_hyphen_1:
+            if (input != '-') {
+                return bad;
+            }
+            state_ = expecting_hyphen_2;
+            return indeterminate;
+        case expecting_hyphen_2:
+            if (input != '-') {
+                return bad;
+            }
+            state_ = boundary_first;
+            return indeterminate;
+        case boundary_first:
+            if (input == '\r') {
+                state_ = expecting_newline_1;
+            }
+            return indeterminate;
+        case expecting_newline_1:
+            if (input == '\n') {
+                state_ = header_line_start;
+            } else {
+                return bad;
+            }
+            return indeterminate;
+        case header_line_start:
+            if (input == '\r') {
+                state_ = expecting_newline_3;
+            } else if (!headers_.empty() && (input == ' ' || input == '\t')) {
+                state_ = header_lws;
+            } else if (!isChar(input) || isCtl(input) || isTsspecial(input)) {
+                return bad;
+            } else {
+                headers_.push_back(Header());
+                headers_.back().name_.reserve(20);
+                headers_.back().value_.reserve(50);
+                headers_.back().name_.push_back(input);
+                state_ = header_name;
+            }
+            return indeterminate;
+        case header_lws:
+            if (input == '\r') {
+                state_ = expecting_newline_2;
+            } else if (input == ' ' || input == '\t') {
+                // skip
+            } else if (isCtl(input)) {
+                return bad;
+            } else {
+                state_ = header_value;
+                headers_.back().value_.push_back(input);
+            }
+            return indeterminate;
+        case header_name:
+            if (input == ':') {
+                state_ = space_before_header_value;
+            } else if (!isChar(input) || isCtl(input) || isTsspecial(input)) {
+                return bad;
+            } else {
+                headers_.back().name_.push_back(input);
+            }
+            return indeterminate;
+        case space_before_header_value:
+            if (input == ' ') {
+                state_ = header_value;
+            } else {
+                return bad;
+            }
+            return indeterminate;
+        case header_value: {
+            if (input == '\r') {
+                Header &h = headers_.back();
+
+                if (strcasecmp(h.name_.c_str(), "Content-Disposition") == 0) {
+                    const std::string key = "filename=\"";
+                    std::size_t foundStart = h.value_.rfind(key);
+                    std::size_t foundEnd = h.value_.find("\"", foundStart + key.size());
+                    if (foundStart != std::string::npos && foundEnd != std::string::npos &&
+                        foundEnd > foundStart) {
+                        if (parts.empty()) {
+                            parts.push_back(ContentPart());
+                        }
+                        parts.back().filename_ = h.value_.substr(
+                            foundStart + key.size(), foundEnd - foundStart - key.size());
+                        headers_.clear();
+                    } else {
+                        return bad;
+                    }
+                }
+                state_ = expecting_newline_2;
+            } else if (isCtl(input)) {
+                return bad;
+            } else {
+                headers_.back().value_.push_back(input);
+            }
+            return indeterminate;
+        }
+        case expecting_newline_2:
+            if (input == '\n') {
+                state_ = header_line_start;
+            } else {
+                return bad;
+            }
+            return indeterminate;
+        case expecting_newline_3: {
+            if (input == '\n') {
+                state_ = part_data_start;
+            } else {
+                return bad;
+            }
+            return indeterminate;
+        }
+        case part_data_start:
+            if (parts.empty()) {
+                parts.push_back(ContentPart());
+            }
+            if (parts.back().start_ == nullptr) {
+                parts.back().start_ = inputPtr;
+            } else {
+                parts.push_back(ContentPart());
+                parts.back().start_ = inputPtr;
+            }
+            state_ = part_data_cont;
+            return indeterminate;
+        case part_data_cont:
+            if (input == '-') {
+                state_ = expecting_hyphen_3;
+            }
+            return indeterminate;
+        case expecting_hyphen_3:
+            if (input == '-') {
+                state_ = boundary_next;
+                boundaryCount_ = 0;
+            } else {
+                state_ = part_data_cont;
+            }
+            return indeterminate;
+        case boundary_next:
+            if (input == boundaryStr_[boundaryCount_++]) {
+                if (boundaryCount_ == boundaryStr_.size()) {
+                    state_ = boundary_close;
+                }
+            } else {
+                boundaryCount_ = 0;
+                state_ = part_data_cont;
+            }
+            return indeterminate;
+        case boundary_close: {
+            if (parts.empty()) {
+                parts.push_back(ContentPart());
+            }
+            if (parts.back().end_ == nullptr) {
+                parts.back().end_ = inputPtr;
+            } else {
+                parts.push_back(ContentPart());
+                parts.back().end_ = inputPtr;
+            }
+
+            if (input == '-') {
+                return done;
+            } else if (input == '\r') {
+                parts.push_back(ContentPart());
+                state_ = expecting_newline_1;
+            } else {
+                return bad;
+            }
+            return indeterminate;
+        }
+        default:
+            return bad;
+    }
+}
+
+bool MultiPartParser::isChar(int c) {
+    return c >= 0 && c <= 127;
+}
+
+bool MultiPartParser::isCtl(int c) {
+    return (c >= 0 && c <= 31) || (c == 127);
+}
+
+bool MultiPartParser::isTsspecial(int c) {
+    switch (c) {
+        case '(':
+        case ')':
+        case '<':
+        case '>':
+        case '@':
+        case ',':
+        case ';':
+        case ':':
+        case '\\':
+        case '"':
+        case '/':
+        case '[':
+        case ']':
+        case '?':
+        case '=':
+        case '{':
+        case '}':
+        case ' ':
+        case '\t':
+            return true;
+        default:
+            return false;
+    }
+}
+
+bool MultiPartParser::isDigit(int c) {
+    return c >= '0' && c <= '9';
+}
+
+}  // namespace server
+}  // namespace http
+

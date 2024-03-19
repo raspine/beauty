@@ -39,7 +39,7 @@ void Connection::doRead() {
                 std::tie(result, std::ignore) = requestParser_.parse(
                     request_, buffer_.data(), buffer_.data() + bytesTransferred);
 
-                if (result == RequestParser::good_complete) {
+                if (result == RequestParser::good_complete || result == RequestParser::good_part) {
                     if (requestDecoder_.decodeRequest(request_)) {
                         requestHandler_.handleRequest(connectionId_, request_, reply_);
                         doWriteHeaders();
