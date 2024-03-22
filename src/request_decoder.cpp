@@ -31,7 +31,7 @@ bool RequestDecoder::decodeRequest(Request &req) {
     if (req.method_ != "GET") {
         if (req.getHeaderValue("content-type") == "application/x-www-form-urlencoded") {
             std::string bodyStr;
-            urlDecode(req.body_.begin(), req.body_.end(), bodyStr);
+            urlDecode(req.content_.begin(), req.content_.end(), bodyStr);
             keyValDecode(bodyStr, req.formParams_);
         }
     }

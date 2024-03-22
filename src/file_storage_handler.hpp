@@ -1,7 +1,6 @@
 #pragma once
 
 #include <map>
-#include <set>
 #include <string>
 
 #include "reply.hpp"
@@ -19,7 +18,7 @@ class FileStorageHandler {
 
    private:
     const std::string docRoot_;
-    std::set<std::string> files_;
+    std::map<std::string, size_t> files_;
 };
 
 }  // namespace server

@@ -13,11 +13,14 @@ namespace server {
 Connection::Connection(asio::ip::tcp::socket socket,
                        ConnectionManager &manager,
                        RequestHandler &handler,
-                       unsigned connectionId)
+                       unsigned connectionId,
+                       size_t maxContentSize)
     : socket_(std::move(socket)),
       connectionManager_(manager),
       requestHandler_(handler),
-      connectionId_(connectionId) {}
+      connectionId_(connectionId),
+      request_(maxContentSize),
+      reply_(maxContentSize) {}
 
 void Connection::start() {
     doRead();
@@ -30,26 +33,21 @@ void Connection::stop() {
 void Connection::doRead() {
     auto self(shared_from_this());
     socket_.async_read_some(
-        asio::buffer(buffer_), [this, self](std::error_code ec, std::size_t bytes_transferred) {
+        asio::buffer(buffer_), [this, self](std::error_code ec, std::size_t bytesTransferred) {
             if (!ec) {
                 RequestParser::result_type result;
                 std::tie(result, std::ignore) = requestParser_.parse(
-                    request_, buffer_.data(), buffer_.data() + bytes_transferred);
+                    request_, buffer_.data(), buffer_.data() + bytesTransferred);
 
-                std::cout << "reading" << std::endl;
-                if (result == RequestParser::good) {
-                    std::cout << "good" << std::endl;
+                if (result == RequestParser::good_complete || result == RequestParser::good_part) {
                     if (requestDecoder_.decodeRequest(request_)) {
-                        std::cout << "decoded OK" << std::endl;
                         requestHandler_.handleRequest(connectionId_, request_, reply_);
                         doWriteHeaders();
                     } else {
-                        std::cout << "decoded fail" << std::endl;
                         reply_ = Reply::stockReply(Reply::bad_request);
                         doWriteHeaders();
                     }
                 } else if (result == RequestParser::bad) {
-                    std::cout << "bad" << std::endl;
                     reply_ = Reply::stockReply(Reply::bad_request);
                     doWriteHeaders();
                 } else {
@@ -85,8 +83,8 @@ void Connection::doWriteContent() {
     asio::async_write(
         socket_, reply_.contentToBuffers(), [this, self](std::error_code ec, std::size_t) {
             if (!ec) {
-                if (reply_.useChunking_) {
-                    if (reply_.finalChunk_) {
+                if (reply_.replyPartial_) {
+                    if (reply_.finalPart_) {
                         handleWriteCompleted();
                     } else {
                         requestHandler_.handleChunk(connectionId_, reply_);

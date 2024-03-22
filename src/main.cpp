@@ -26,7 +26,8 @@ int main(int argc, char *argv[]) {
         FileHandler fileHandler(argv[3]);
         FileStorageHandler fileStorageHandler(argv[3]);
         Server s(ioc, argv[1], argv[2], &fileHandler);
-                s.addRequestHandler(std::bind(&FileStorageHandler::handleRequest, &fileStorageHander, _1, _2);
+        s.addRequestHandler(
+            std::bind(&FileStorageHandler::handleRequest, &fileStorageHandler, _1, _2));
 
         // Run the server until stopped.
         ioc.run();

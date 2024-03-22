@@ -72,7 +72,7 @@ const char crlf[] = {'\r', '\n'};
 
 }  // namespace misc_strings
 
-Reply::Reply() {
+Reply::Reply(size_t maxContentSize) : maxContentSize_(maxContentSize) {
     defaultHeaders_.reserve(2);
     addedHeaders_.reserve(2);
 }
@@ -276,7 +276,7 @@ std::vector<char> toArray(Reply::status_type status) {
 }  // namespace stock_replies
 
 Reply Reply::stockReply(Reply::status_type status) {
-    Reply rep;
+    Reply rep(rep.content_.size());
     rep.status_ = status;
     rep.content_ = stock_replies::toArray(status);
     rep.defaultHeaders_.resize(2);

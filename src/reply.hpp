@@ -19,7 +19,7 @@ class Reply {
     friend class Connection;
 
    public:
-    Reply();
+    Reply(size_t maxContentSize);
     virtual ~Reply() = default;
 
     enum status_type {
@@ -66,8 +66,9 @@ class Reply {
     size_t contentSize_;
 
     // for http chunking (using content-length, not "http chunking")
-    bool useChunking_ = false;
-    bool finalChunk_ = false;
+    size_t maxContentSize_;
+    bool replyPartial_ = false;
+    bool finalPart_ = false;
 
     // Convert the reply into a vector of buffers. The buffers do not own the
     // underlying memory blocks, therefore the reply object must remain valid

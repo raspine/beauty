@@ -8,18 +8,26 @@
 namespace http {
 namespace server {
 
-Server::Server(asio::io_context &ioContext, uint16_t port, IFileHandler *fileHandler)
+Server::Server(asio::io_context &ioContext,
+               uint16_t port,
+               IFileHandler *fileHandler,
+               size_t maxContentSize)
     : acceptor_(ioContext, asio::ip::tcp::endpoint(asio::ip::tcp::v4(), port)),
       connectionManager_(),
-      requestHandler_(fileHandler) {
+      requestHandler_(fileHandler),
+      maxContentSize_(maxContentSize) {
     doAccept();
 }
 
 Server::Server(asio::io_context &ioContext,
                const std::string &address,
                const std::string &port,
-               IFileHandler *fileHandler)
-    : acceptor_(ioContext), connectionManager_(), requestHandler_(fileHandler) {
+               IFileHandler *fileHandler,
+               size_t maxContentSize)
+    : acceptor_(ioContext),
+      connectionManager_(),
+      requestHandler_(fileHandler),
+      maxContentSize_(maxContentSize) {
     // Register to handle the signals that indicate when the server should exit.
     // It is safe to register for the same signal multiple times in a program,
     // provided all registration for the specified signal is made through Asio.
@@ -69,8 +77,11 @@ void Server::doAccept() {
         }
 
         if (!ec) {
-            connectionManager_.start(std::make_shared<Connection>(
-                std::move(socket), connectionManager_, requestHandler_, connectionId_++));
+            connectionManager_.start(std::make_shared<Connection>(std::move(socket),
+                                                                  connectionManager_,
+                                                                  requestHandler_,
+                                                                  connectionId_++,
+                                                                  maxContentSize_));
         } else {
             std::cout << "doAccept: " << ec.message() << ':' << ec.value() << std::endl;
         }
