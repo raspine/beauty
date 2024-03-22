@@ -44,7 +44,7 @@ void RequestHandler::addFileHeaderHandler(const addFileHeaderCallback &cb) {
     addFileHeaderCallback_ = cb;
 }
 
-void RequestHandler::handleRequest(unsigned connectionId, const Request &req, Reply &rep) {
+void RequestHandler::handleRequest(unsigned connectionId, Request &req, Reply &rep) {
     std::cout << std::endl;
     std::cout << req.uri_ << std::endl;
     std::cout << req.method_ << std::endl;
@@ -61,7 +61,7 @@ void RequestHandler::handleRequest(unsigned connectionId, const Request &req, Re
     rep.filePath_ = req.requestPath_;
 
     // if path ends in slash (i.e. is a directory) then add "index.html"
-    if (rep.filePath_[rep.filePath_.size() - 1] == '/') {
+    if (req.method_ == "GET" && rep.filePath_[rep.filePath_.size() - 1] == '/') {
         rep.filePath_ += "index.html";
     }
 
@@ -73,46 +73,32 @@ void RequestHandler::handleRequest(unsigned connectionId, const Request &req, Re
     }
 
     if (fileHandler_ != nullptr) {
-        // open the file to send back
-        size_t contentSize = fileHandler_->openFile(connectionId, rep.filePath_);
-        if (contentSize > 0) {
-            // determine the file extension.
-            std::string extension;
-            // ..again if directory, then extension is provided by index.html
-            if (req.requestPath_[req.requestPath_.size() - 1] == '/') {
-                extension = "html";
-            } else {
-                std::size_t lastSlashPos = req.requestPath_.find_last_of("/");
-                std::size_t lastDotPos = req.requestPath_.find_last_of(".");
-                if (lastDotPos != std::string::npos && lastDotPos > lastSlashPos) {
-                    extension = req.requestPath_.substr(lastDotPos + 1);
+        if (req.method_ == "POST" && multiPartParser_.parseHeader(req)) {
+            std::deque<MultiPartParser::ContentPart> parts;
+
+            MultiPartParser::result_type result = multiPartParser_.parse(req, parts);
+            if (!writeFileParts(connectionId, req, rep, parts)) {
+                return;
+            }
+
+            if (result == MultiPartParser::result_type::done) {
+                multiPartParser_.flush(req, parts);
+                if (!writeFileParts(connectionId, req, rep, parts)) {
+                    return;
                 }
             }
-
-            // fill initial content
-            rep.replyPartial_ = contentSize > rep.maxContentSize_;
-            rep.status_ = Reply::ok;
-            readChunkFromFile(connectionId, rep);
-            if (!rep.replyPartial_) {
-                // all data fits in initial content
-                fileHandler_->closeFile(connectionId);
+        } else if (req.method_ == "GET") {
+            if (openAndReadFile(connectionId, req, rep)) {
+                return;
             }
-
-            rep.defaultHeaders_.resize(2);
-            rep.defaultHeaders_[0].name_ = "Content-Length";
-            rep.defaultHeaders_[0].value_ = std::to_string(contentSize);
-            rep.defaultHeaders_[1].name_ = "Content-Type";
-            rep.defaultHeaders_[1].value_ = mime_types::extensionToType(extension);
-            addFileHeaderCallback_(rep.addedHeaders_);
-            return;
         }
     }
 
     fileNotFoundCb_(rep);
-}
+}  // namespace server
 
-void RequestHandler::handleChunk(unsigned connectionId, Reply &rep) {
-    size_t nrReadBytes = readChunkFromFile(connectionId, rep);
+void RequestHandler::handlePartialRead(unsigned connectionId, Reply &rep) {
+    size_t nrReadBytes = readFromFile(connectionId, rep);
 
     if (nrReadBytes < rep.maxContentSize_) {
         rep.finalPart_ = true;
@@ -120,18 +106,84 @@ void RequestHandler::handleChunk(unsigned connectionId, Reply &rep) {
     }
 }
 
+void RequestHandler::handlePartialWrite(unsigned connectionId, Reply &rep) {}
+
 void RequestHandler::closeFile(unsigned connectionId) {
     if (fileHandler_ != nullptr) {
         fileHandler_->closeFile(connectionId);
     }
 }
 
-size_t RequestHandler::readChunkFromFile(unsigned connectionId, Reply &rep) {
+bool RequestHandler::openAndReadFile(unsigned connectionId, const Request &req, Reply &rep) {
+    // open the file to send back
+    size_t contentSize = fileHandler_->openFileForRead(connectionId, rep.filePath_);
+    if (contentSize > 0) {
+        // determine the file extension.
+        std::string extension;
+        // ..again if directory, then extension is provided by index.html
+        if (req.requestPath_[req.requestPath_.size() - 1] == '/') {
+            extension = "html";
+        } else {
+            std::size_t lastSlashPos = req.requestPath_.find_last_of("/");
+            std::size_t lastDotPos = req.requestPath_.find_last_of(".");
+            if (lastDotPos != std::string::npos && lastDotPos > lastSlashPos) {
+                extension = req.requestPath_.substr(lastDotPos + 1);
+            }
+        }
+
+        // fill initial content
+        rep.replyPartial_ = contentSize > rep.maxContentSize_;
+        rep.status_ = Reply::ok;
+        readFromFile(connectionId, rep);
+        if (!rep.replyPartial_) {
+            // all data fits in initial content
+            fileHandler_->closeFile(connectionId);
+        }
+
+        rep.defaultHeaders_.resize(2);
+        rep.defaultHeaders_[0].name_ = "Content-Length";
+        rep.defaultHeaders_[0].value_ = std::to_string(contentSize);
+        rep.defaultHeaders_[1].name_ = "Content-Type";
+        rep.defaultHeaders_[1].value_ = mime_types::extensionToType(extension);
+        addFileHeaderCallback_(rep.addedHeaders_);
+        return true;
+    }
+    return false;
+}
+
+size_t RequestHandler::readFromFile(unsigned connectionId, Reply &rep) {
     rep.content_.resize(rep.maxContentSize_);
     int nrReadBytes =
         fileHandler_->readFile(connectionId, rep.content_.data(), rep.content_.size());
     rep.content_.resize(nrReadBytes);
     return nrReadBytes;
+}
+
+bool RequestHandler::writeFileParts(unsigned connectionId,
+                                    const Request &req,
+                                    Reply &rep,
+                                    std::deque<MultiPartParser::ContentPart> &parts) {
+    std::string err;
+    for (auto &part : parts) {
+        if (!part.filename_.empty()) {
+            std::string filePath = req.requestPath_ + part.filename_;
+            Reply::status_type status = fileHandler_->openFileForWrite(connectionId, filePath, err);
+            if (status != Reply::status_type::ok) {
+                rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
+                rep.send(status, "text/html");
+                return false;
+            }
+        }
+        size_t size = part.end_ - part.start_;
+        Reply::status_type status = fileHandler_->writeFile(connectionId, part.start_, size, err);
+        if (status != Reply::status_type::ok) {
+            fileHandler_->closeFile(connectionId);
+            rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
+            rep.send(status, "text/html");
+            return false;
+        }
+    }
+    return true;
 }
 
 }  // namespace server

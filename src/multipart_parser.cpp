@@ -18,6 +18,7 @@ void MultiPartParser::reset() {
 }
 
 bool MultiPartParser::parseHeader(const Request &req) {
+    reset();
     std::string contentTypeVal = req.getHeaderValue("Content-Type");
     auto it = contentTypeVal.find("multipart");
     if (it == std::string::npos) {

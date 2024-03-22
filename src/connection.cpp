@@ -39,7 +39,7 @@ void Connection::doRead() {
                 std::tie(result, std::ignore) = requestParser_.parse(
                     request_, buffer_.data(), buffer_.data() + bytesTransferred);
 
-                if (result == RequestParser::good_complete || result == RequestParser::good_part) {
+                if (result == RequestParser::good_complete) {
                     if (requestDecoder_.decodeRequest(request_)) {
                         requestHandler_.handleRequest(connectionId_, request_, reply_);
                         doWriteHeaders();
@@ -47,11 +47,18 @@ void Connection::doRead() {
                         reply_ = Reply::stockReply(Reply::bad_request);
                         doWriteHeaders();
                     }
+                } else if (result == RequestParser::good_part) {
+                    if (requestDecoder_.decodeRequest(request_)) {
+                        requestHandler_.handleRequest(connectionId_, request_, reply_);
+                        doReadBody();
+                    } else {
+                        reply_ = Reply::stockReply(Reply::bad_request);
+                        doRead();
+                    }
                 } else if (result == RequestParser::bad) {
                     reply_ = Reply::stockReply(Reply::bad_request);
                     doWriteHeaders();
                 } else {
-                    std::cout << "indeterminte" << std::endl;
                     doRead();
                 }
             } else if (ec != asio::error::operation_aborted) {
@@ -59,6 +66,12 @@ void Connection::doRead() {
                 connectionManager_.stop(shared_from_this());
             }
         });
+}
+
+void Connection::doReadBody() {
+    auto self(shared_from_this());
+    socket_.async_read_some(asio::buffer(buffer_),
+                            [this, self](std::error_code ec, std::size_t bytesTransferred) {});
 }
 
 void Connection::doWriteHeaders() {
@@ -87,7 +100,7 @@ void Connection::doWriteContent() {
                     if (reply_.finalPart_) {
                         handleWriteCompleted();
                     } else {
-                        requestHandler_.handleChunk(connectionId_, reply_);
+                        requestHandler_.handlePartialRead(connectionId_, reply_);
                         doWriteContent();
                     }
                 } else {

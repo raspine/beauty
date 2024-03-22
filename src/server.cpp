@@ -16,6 +16,10 @@ Server::Server(asio::io_context &ioContext,
       connectionManager_(),
       requestHandler_(fileHandler),
       maxContentSize_(maxContentSize) {
+    if (maxContentSize < 1024) {
+        std::cout << "maxContentSize must be equal or larger than 1024 bytes" << std::endl;
+        return;
+    }
     doAccept();
 }
 
@@ -38,6 +42,10 @@ Server::Server(asio::io_context &ioContext,
     signals_->add(SIGQUIT);
 #endif  // defined(SIGQUIT)
 
+    if (maxContentSize < 1024) {
+        std::cout << "maxContentSize must be equal or larger than 1024 bytes" << std::endl;
+        return;
+    }
     doAwaitStop();
 
     // Open the acceptor with the option to reuse the address (i.e.
