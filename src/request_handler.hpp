@@ -26,7 +26,9 @@ class RequestHandler {
     void addFileHeaderHandler(const addFileHeaderCallback &cb);
     void handleRequest(unsigned connectionId, Request &req, Reply &rep);
     void handlePartialRead(unsigned connectionId, Reply &rep);
-    void handlePartialWrite(unsigned connectionId, Reply &rep);
+    MultiPartParser::result_type handlePartialWrite(unsigned connectionId,
+                                                    Request &req,
+                                                    Reply &rep);
     void closeFile(unsigned connectionId);
 
    private:

@@ -74,19 +74,7 @@ void RequestHandler::handleRequest(unsigned connectionId, Request &req, Reply &r
 
     if (fileHandler_ != nullptr) {
         if (req.method_ == "POST" && multiPartParser_.parseHeader(req)) {
-            std::deque<MultiPartParser::ContentPart> parts;
-
-            MultiPartParser::result_type result = multiPartParser_.parse(req, parts);
-            if (!writeFileParts(connectionId, req, rep, parts)) {
-                return;
-            }
-
-            if (result == MultiPartParser::result_type::done) {
-                multiPartParser_.flush(req, parts);
-                if (!writeFileParts(connectionId, req, rep, parts)) {
-                    return;
-                }
-            }
+            MultiPartParser::result_type result = handlePartialWrite(connectionId, rep);
         } else if (req.method_ == "GET") {
             if (openAndReadFile(connectionId, req, rep)) {
                 return;
@@ -106,7 +94,23 @@ void RequestHandler::handlePartialRead(unsigned connectionId, Reply &rep) {
     }
 }
 
-void RequestHandler::handlePartialWrite(unsigned connectionId, Reply &rep) {}
+MultiPartParser::result_type RequestHandler::handlePartialWrite(unsigned connectionId,
+                                                                Request &req,
+                                                                Reply &rep) {
+    std::deque<MultiPartParser::ContentPart> parts;
+    MultiPartParser::result_type result = multiPartParser_.parse(req, parts);
+
+    if (!writeFileParts(connectionId, req, rep, parts)) {
+        return MultiPartParser::result_type::bad;
+    }
+
+    if (result == MultiPartParser::result_type::done) {
+        multiPartParser_.flush(req, parts);
+        if (!writeFileParts(connectionId, req, rep, parts)) {
+            return MultiPartParser::result_type::bad;
+        }
+    }
+}
 
 void RequestHandler::closeFile(unsigned connectionId) {
     if (fileHandler_ != nullptr) {
@@ -167,20 +171,17 @@ bool RequestHandler::writeFileParts(unsigned connectionId,
     for (auto &part : parts) {
         if (!part.filename_.empty()) {
             std::string filePath = req.requestPath_ + part.filename_;
-            Reply::status_type status = fileHandler_->openFileForWrite(connectionId, filePath, err);
-            if (status != Reply::status_type::ok) {
+            rep.status_ = fileHandler_->openFileForWrite(connectionId, filePath, err);
+            if (rep.status_ != Reply::status_type::ok) {
                 rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
-                rep.send(status, "text/html");
                 return false;
             }
         }
         size_t size = part.end_ - part.start_;
-        Reply::status_type status = fileHandler_->writeFile(connectionId, part.start_, size, err);
-        if (status != Reply::status_type::ok) {
+        rep.status_ = fileHandler_->writeFile(connectionId, part.start_, size, err);
+        if (rep.status_ != Reply::status_type::ok) {
             fileHandler_->closeFile(connectionId);
             rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
-            rep.send(status, "text/html");
-            return false;
         }
     }
     return true;

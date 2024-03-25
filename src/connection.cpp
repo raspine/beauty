@@ -53,7 +53,7 @@ void Connection::doRead() {
                         doReadBody();
                     } else {
                         reply_ = Reply::stockReply(Reply::bad_request);
-                        doRead();
+                        doWriteHeaders();
                     }
                 } else if (result == RequestParser::bad) {
                     reply_ = Reply::stockReply(Reply::bad_request);
@@ -70,8 +70,15 @@ void Connection::doRead() {
 
 void Connection::doReadBody() {
     auto self(shared_from_this());
-    socket_.async_read_some(asio::buffer(buffer_),
-                            [this, self](std::error_code ec, std::size_t bytesTransferred) {});
+    socket_.async_read_some(
+        asio::buffer(buffer_), [this, self](std::error_code ec, std::size_t bytesTransferred) {
+            if (!ec) {
+                requestHandler_.handleRequest(connectionId_, request_, reply_);
+            } else if (ec != asio::error::operation_aborted) {
+                std::cout << "doReadBody: " << ec.message() << ':' << ec.value() << std::endl;
+                connectionManager_.stop(shared_from_this());
+            }
+        });
 }
 
 void Connection::doWriteHeaders() {
