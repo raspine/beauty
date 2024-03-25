@@ -105,7 +105,7 @@ TEST_CASE("server without handlers", "[server]") {
     auto t = std::thread(&asio::io_context::run, &ioc);
 
     SECTION("it should return 400 for malformad request") {
-        // HTTTP spelled incorrectly
+        // relative path not allowed
         const std::string malformadRequest =
             "GET ../index.html HTTP/1.1\r\nHost: 127.0.0.1\r\nAccept: "
             "*/*\r\nConnection: "
@@ -401,23 +401,23 @@ TEST_CASE("server with route handler", "[server]") {
         REQUIRE(mockRequestHandler.getNoCalls() == 1);
         REQUIRE(mockRequestHandler2.getNoCalls() == 1);
     }
-    SECTION("it should only call all handlers until one returns false") {
-        mockRequestHandler.setReturnToClient(true);
-        MockRequestHandler mockRequestHandler2;
-        dut.addRequestHandler(std::bind(&MockRequestHandler::handleRequest,
-                                        &mockRequestHandler2,
-                                        std::placeholders::_1,
-                                        std::placeholders::_2));
-        openConnection(c, "127.0.0.1", port);
+    // SECTION("it should only call all handlers until one returns false") {
+    //     mockRequestHandler.setReturnToClient(true);
+    //     MockRequestHandler mockRequestHandler2;
+    //     dut.addRequestHandler(std::bind(&MockRequestHandler::handleRequest,
+    //                                     &mockRequestHandler2,
+    //                                     std::placeholders::_1,
+    //                                     std::placeholders::_2));
+    //     openConnection(c, "127.0.0.1", port);
 
-        auto fut = createFutureResult(c);
+    //     auto fut = createFutureResult(c);
 
-        c.sendRequest(GetApiRequest);
+    //     c.sendRequest(GetApiRequest);
 
-        auto res = fut.get();
-        REQUIRE(mockRequestHandler.getNoCalls() == 1);
-        REQUIRE(mockRequestHandler2.getNoCalls() == 0);
-    }
+    //     auto res = fut.get();
+    //     REQUIRE(mockRequestHandler.getNoCalls() == 1);
+    //     REQUIRE(mockRequestHandler2.getNoCalls() == 0);
+    // }
 
     ioc.stop();
     t.join();

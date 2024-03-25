@@ -44,13 +44,16 @@ void RequestHandler::addFileHeaderHandler(const addFileHeaderCallback &cb) {
     addFileHeaderCallback_ = cb;
 }
 
-void RequestHandler::handleRequest(unsigned connectionId, Request &req, Reply &rep) {
+void RequestHandler::handleRequest(unsigned connectionId,
+                                   const Request &req,
+                                   std::vector<char> &content,
+                                   Reply &rep) {
     std::cout << std::endl;
     std::cout << req.uri_ << std::endl;
     std::cout << req.method_ << std::endl;
-    std::cout << "################# body size" << req.content_.size() << std::endl;
-    for (int i = 0; i < req.content_.size(); ++i) {
-        printf("%c", req.content_[i]);
+    std::cout << "################# body size" << content.size() << std::endl;
+    for (int i = 0; i < content.size(); ++i) {
+        printf("%c", content[i]);
     }
     puts("");
     for (const auto &header : req.headers_) {
@@ -74,7 +77,8 @@ void RequestHandler::handleRequest(unsigned connectionId, Request &req, Reply &r
 
     if (fileHandler_ != nullptr) {
         if (req.method_ == "POST" && multiPartParser_.parseHeader(req)) {
-            MultiPartParser::result_type result = handlePartialWrite(connectionId, rep);
+            rep.status_ = Reply::ok;
+            handlePartialWrite(connectionId, req, content, rep);
         } else if (req.method_ == "GET") {
             if (openAndReadFile(connectionId, req, rep)) {
                 return;
@@ -83,7 +87,7 @@ void RequestHandler::handleRequest(unsigned connectionId, Request &req, Reply &r
     }
 
     fileNotFoundCb_(rep);
-}  // namespace server
+}
 
 void RequestHandler::handlePartialRead(unsigned connectionId, Reply &rep) {
     size_t nrReadBytes = readFromFile(connectionId, rep);
@@ -94,21 +98,23 @@ void RequestHandler::handlePartialRead(unsigned connectionId, Reply &rep) {
     }
 }
 
-MultiPartParser::result_type RequestHandler::handlePartialWrite(unsigned connectionId,
-                                                                Request &req,
-                                                                Reply &rep) {
+void RequestHandler::handlePartialWrite(unsigned connectionId,
+                                        const Request &req,
+                                        std::vector<char> &content,
+                                        Reply &rep) {
     std::deque<MultiPartParser::ContentPart> parts;
-    MultiPartParser::result_type result = multiPartParser_.parse(req, parts);
+    MultiPartParser::result_type result = multiPartParser_.parse(req, content, parts);
 
-    if (!writeFileParts(connectionId, req, rep, parts)) {
-        return MultiPartParser::result_type::bad;
+    if (result == MultiPartParser::result_type::bad) {
+        rep.stockReply(Reply::status_type::bad_request);
+        return;
     }
 
+    writeFileParts(connectionId, req, rep, parts);
+
     if (result == MultiPartParser::result_type::done) {
-        multiPartParser_.flush(req, parts);
-        if (!writeFileParts(connectionId, req, rep, parts)) {
-            return MultiPartParser::result_type::bad;
-        }
+        multiPartParser_.flush(content, parts);
+        writeFileParts(connectionId, req, rep, parts);
     }
 }
 
@@ -124,7 +130,7 @@ bool RequestHandler::openAndReadFile(unsigned connectionId, const Request &req, 
     if (contentSize > 0) {
         // determine the file extension.
         std::string extension;
-        // ..again if directory, then extension is provided by index.html
+        // if directory, then extension is provided by index.html
         if (req.requestPath_[req.requestPath_.size() - 1] == '/') {
             extension = "html";
         } else {
@@ -163,7 +169,7 @@ size_t RequestHandler::readFromFile(unsigned connectionId, Reply &rep) {
     return nrReadBytes;
 }
 
-bool RequestHandler::writeFileParts(unsigned connectionId,
+void RequestHandler::writeFileParts(unsigned connectionId,
                                     const Request &req,
                                     Reply &rep,
                                     std::deque<MultiPartParser::ContentPart> &parts) {
@@ -173,18 +179,17 @@ bool RequestHandler::writeFileParts(unsigned connectionId,
             std::string filePath = req.requestPath_ + part.filename_;
             rep.status_ = fileHandler_->openFileForWrite(connectionId, filePath, err);
             if (rep.status_ != Reply::status_type::ok) {
+                fileHandler_->closeFile(connectionId);
                 rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
-                return false;
             }
         }
         size_t size = part.end_ - part.start_;
-        rep.status_ = fileHandler_->writeFile(connectionId, part.start_, size, err);
+        rep.status_ = fileHandler_->writeFile(connectionId, &(*part.start_), size, err);
         if (rep.status_ != Reply::status_type::ok) {
             fileHandler_->closeFile(connectionId);
             rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
         }
     }
-    return true;
 }
 
 }  // namespace server

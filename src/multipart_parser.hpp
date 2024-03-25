@@ -26,8 +26,10 @@ class MultiPartParser {
 
     struct ContentPart {
         std::string filename_;
-        char *start_ = nullptr;
-        char *end_ = nullptr;
+        std::vector<char>::iterator start_;
+        std::vector<char>::iterator end_;
+        bool foundStart_ = false;
+        bool foundEnd_ = false;
     };
 
     // Return true if Content-Type is set to multipart
@@ -38,13 +40,15 @@ class MultiPartParser {
     // data is required.
     // The caller must inspect readyParts to see if any parts has been
     // completed.
-    result_type parse(Request &req, std::deque<ContentPart> &parts);
+    result_type parse(const Request &req,
+                      std::vector<char> &content,
+                      std::deque<ContentPart> &parts);
 
-    void flush(Request &req, std::deque<ContentPart> &parts);
+    void flush(std::vector<char> &content, std::deque<ContentPart> &parts);
 
    private:
     // Handle the next character of input.
-    result_type consume(Request &req, char *inputPtr, std::deque<ContentPart> &parts);
+    result_type consume(std::vector<char>::iterator inputPtr, std::deque<ContentPart> &parts);
 
     // Check if a byte is an HTTP character.
     static bool isChar(int c);

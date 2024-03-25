@@ -15,7 +15,7 @@ bool ends_with(std::string const& value, std::string const& ending) {
 }
 }
 
-size_t MockFileHandler::openFile(unsigned id, const std::string& path) {
+size_t MockFileHandler::openFileForRead(unsigned id, const std::string& path) {
     OpenFile& openFile = openFiles_[id];
     countOpenFileCalls_++;
     if (openFile.isOpen_) {
@@ -47,6 +47,18 @@ int MockFileHandler::readFile(unsigned id, char* buf, size_t maxSize) {
     std::copy(openFile.readIt_, std::next(openFile.readIt_, bytesToCopy), buf);
     std::advance(openFile.readIt_, bytesToCopy);
     return bytesToCopy;
+}
+
+http::server::Reply::status_type MockFileHandler::openFileForWrite(unsigned id,
+                                                                   const std::string& path,
+                                                                   std::string& err) {
+    return http::server::Reply::status_type::not_implemented;
+}
+http::server::Reply::status_type MockFileHandler::writeFile(unsigned id,
+                                                            const char* buf,
+                                                            size_t size,
+                                                            std::string& err) {
+    return http::server::Reply::status_type::not_implemented;
 }
 
 // creates and fills the "file" with counter values

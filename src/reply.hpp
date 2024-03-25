@@ -70,6 +70,9 @@ class Reply {
     bool replyPartial_ = false;
     bool finalPart_ = false;
 
+    // keep track of the number of bytes received in request body
+    int noBodyBytesReceived_ = -1;
+
     // Convert the reply into a vector of buffers. The buffers do not own the
     // underlying memory blocks, therefore the reply object must remain valid
     // and not be changed until the write operation has completed.

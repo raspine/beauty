@@ -62,7 +62,7 @@ class Connection : public std::enable_shared_from_this<Connection> {
     RequestHandler &requestHandler_;
 
     // Buffer for incoming data.
-    std::array<char, 4096> buffer_;
+    std::vector<char> buffer_;
 
     // The incoming request.
     Request request_;

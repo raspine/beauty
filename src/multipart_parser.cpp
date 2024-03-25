@@ -40,11 +40,15 @@ bool MultiPartParser::parseHeader(const Request &req) {
     return true;
 }
 
-MultiPartParser::result_type MultiPartParser::parse(Request &req, std::deque<ContentPart> &parts) {
+MultiPartParser::result_type MultiPartParser::parse(const Request &req,
+                                                    std::vector<char> &content,
+                                                    std::deque<ContentPart> &parts) {
     result_type result;
     parts.clear();
-    for (size_t i = 0; i < req.content_.size(); ++i) {
-        result = consume(req, &req.content_[i], parts);
+    auto begin = content.begin();
+    auto end = content.end();
+    while (begin != end) {
+        result = consume(begin++, parts);
         if (result != indeterminate) {
             break;
         }
@@ -63,22 +67,22 @@ MultiPartParser::result_type MultiPartParser::parse(Request &req, std::deque<Con
 
     // return the previous content (that have been adjusted below)
     parts.swap(lastParts_);
-    req.content_.swap(lastBuffer_);
+    content.swap(lastBuffer_);
 
     // make adjustments to the stored lastParts_ so they are correct when
     // swapped out in the next call
     bool containEndForPartToLeave = false;
     for (auto &lastPart : lastParts_) {
         // if start_ not found, assume buffer start
-        if (lastPart.start_ == nullptr) {
-            lastPart.start_ = &lastBuffer_[0];
+        if (!lastPart.foundStart_) {
+            lastPart.start_ = lastBuffer_.begin();
         }
 
         // end_ (just like an iterator::end()) points to the character
         // after the last character.
         // If end_ not found assume buffer end.
-        if (lastPart.end_ == nullptr) {
-            lastPart.end_ = &lastBuffer_[lastBuffer_.size()];
+        if (!lastPart.foundEnd_) {
+            lastPart.end_ = lastBuffer_.end();
         } else {
             // lastPart.end_ is assigned +1 char after boundary so:
             // "boundary size" + 2*'-' + 2*clrf = 6
@@ -90,6 +94,7 @@ MultiPartParser::result_type MultiPartParser::parse(Request &req, std::deque<Con
                 // a lastPart/Buffer memory) we can adjust it here!
                 ContentPart &partToLeave = parts.back();
                 partToLeave.end_ = partToLeave.end_ - (lastPart.start_ - lastPart.end_);
+                partToLeave.foundEnd_ = true;
 
                 // This part needs removing as it was created
                 // by consume() but only contained end_ for previous part.
@@ -105,13 +110,12 @@ MultiPartParser::result_type MultiPartParser::parse(Request &req, std::deque<Con
     return result;
 }
 
-void MultiPartParser::flush(Request &req, std::deque<ContentPart> &parts) {
+void MultiPartParser::flush(std::vector<char> &content, std::deque<ContentPart> &parts) {
     parts.swap(lastParts_);
-    req.content_.swap(lastBuffer_);
+    content.swap(lastBuffer_);
 }
 
-MultiPartParser::result_type MultiPartParser::consume(Request &req,
-                                                      char *inputPtr,
+MultiPartParser::result_type MultiPartParser::consume(std::vector<char>::iterator inputPtr,
                                                       std::deque<ContentPart> &parts) {
     char input = *inputPtr;
     switch (state_) {
@@ -229,8 +233,9 @@ MultiPartParser::result_type MultiPartParser::consume(Request &req,
             if (parts.empty()) {
                 parts.push_back(ContentPart());
             }
-            if (parts.back().start_ == nullptr) {
+            if (!parts.back().foundStart_) {
                 parts.back().start_ = inputPtr;
+                parts.back().foundStart_ = true;
             } else {
                 parts.push_back(ContentPart());
                 parts.back().start_ = inputPtr;
@@ -264,8 +269,9 @@ MultiPartParser::result_type MultiPartParser::consume(Request &req,
             if (parts.empty()) {
                 parts.push_back(ContentPart());
             }
-            if (parts.back().end_ == nullptr) {
+            if (!parts.back().foundEnd_) {
                 parts.back().end_ = inputPtr;
+                parts.back().foundEnd_ = true;
             } else {
                 parts.push_back(ContentPart());
                 parts.back().end_ = inputPtr;

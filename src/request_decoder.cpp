@@ -8,7 +8,7 @@
 namespace http {
 namespace server {
 
-bool RequestDecoder::decodeRequest(Request &req) {
+bool RequestDecoder::decodeRequest(Request &req, std::vector<char> &content) {
     // url decode uri
     urlDecode(req.uri_.begin(), req.uri_.end(), req.requestPath_);
 
@@ -31,7 +31,7 @@ bool RequestDecoder::decodeRequest(Request &req) {
     if (req.method_ != "GET") {
         if (req.getHeaderValue("content-type") == "application/x-www-form-urlencoded") {
             std::string bodyStr;
-            urlDecode(req.content_.begin(), req.content_.end(), bodyStr);
+            urlDecode(content.begin(), content.end(), bodyStr);
             keyValDecode(bodyStr, req.formParams_);
         }
     }

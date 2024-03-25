@@ -25,14 +25,14 @@ class Server {
     explicit Server(asio::io_context &ioContext,
                     uint16_t port,
                     IFileHandler *fileHandler,
-                    size_t maxContentSize = 1024);
+                    size_t maxContentSize = 4096);
 
     // advanced constructor use for OS:s supporting signal_set
     explicit Server(asio::io_context &ioContext,
                     const std::string &address,
                     const std::string &port,
                     IFileHandler *fileHandler,
-                    size_t maxContentSize = 1024);
+                    size_t maxContentSize = 4096);
 
     uint16_t getBindedPort() const;
 

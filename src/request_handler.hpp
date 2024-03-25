@@ -24,17 +24,21 @@ class RequestHandler {
     void addRequestHandler(const requestHandlerCallback &cb);
     void setFileNotFoundHandler(const fileNotFoundHandlerCallback &cb);
     void addFileHeaderHandler(const addFileHeaderCallback &cb);
-    void handleRequest(unsigned connectionId, Request &req, Reply &rep);
+    void handleRequest(unsigned connectionId,
+                       const Request &req,
+                       std::vector<char> &content,
+                       Reply &rep);
     void handlePartialRead(unsigned connectionId, Reply &rep);
-    MultiPartParser::result_type handlePartialWrite(unsigned connectionId,
-                                                    Request &req,
-                                                    Reply &rep);
+    void handlePartialWrite(unsigned connectionId,
+                            const Request &req,
+                            std::vector<char> &content,
+                            Reply &rep);
     void closeFile(unsigned connectionId);
 
    private:
     bool openAndReadFile(unsigned connectionId, const Request &req, Reply &rep);
     size_t readFromFile(unsigned connectionId, Reply &rep);
-    bool writeFileParts(unsigned connectionId,
+    void writeFileParts(unsigned connectionId,
                         const Request &req,
                         Reply &rep,
                         std::deque<MultiPartParser::ContentPart> &parts);

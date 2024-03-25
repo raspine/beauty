@@ -3,7 +3,7 @@
 namespace http {
 namespace server {
 
-MockRequestHandler::MockRequestHandler() : receivedRequest_(1024), receivedReply_(1024) {}
+MockRequestHandler::MockRequestHandler() : receivedReply_(1024) {}
 
 void MockRequestHandler::handleRequest(const Request& req, Reply& rep) {
     noCalls_++;

@@ -13,16 +13,13 @@ namespace server {
 // A request received from a client.
 struct Request {
     friend class RequestParser;
+    friend class RequestHandler;
 
-    Request(size_t maxContentSize) : maxContentSize_(maxContentSize) {
-        content_.reserve(maxContentSize);
-    }
     std::string method_;
     std::string uri_;
     int httpVersionMajor_ = 0;
     int httpVersionMinor_ = 0;
     std::vector<Header> headers_;
-    std::vector<char> content_;
     bool keepAlive_ = false;
     std::string requestPath_;
     size_t bodySize_;
@@ -53,6 +50,14 @@ struct Request {
         return getParamValue(formParams_, key);
     }
 
+    int getBodySize() const {
+        return bodySize_;
+    }
+
+    int getNoInitialBodyBytesReceived() const {
+        return noInitialBodyBytesReceived_;
+    }
+
    private:
     std::string getParamValue(const std::vector<std::pair<std::string, std::string>> &params,
                               const std::string &key) const {
@@ -75,7 +80,7 @@ struct Request {
         return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), ichar_equals);
     }
 
-    size_t maxContentSize_;
+    int noInitialBodyBytesReceived_ = -1;
 };
 
 }  // namespace server

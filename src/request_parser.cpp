@@ -15,7 +15,21 @@ void RequestParser::reset() {
     state_ = method_start;
 }
 
-RequestParser::result_type RequestParser::consume(Request &req, char input) {
+RequestParser::result_type RequestParser::parse(Request &req, std::vector<char> &content) {
+    auto begin = content.begin();
+    auto end = content.end();
+    while (begin != end) {
+        result_type result = consume(req, content, *begin++);
+        if (result != indeterminate) {
+            return result;
+        }
+    }
+    return good_part;
+}
+
+RequestParser::result_type RequestParser::consume(Request &req,
+                                                  std::vector<char> &content,
+                                                  char input) {
     switch (state_) {
         case method_start:
             if (!isChar(input) || isCtl(input) || isTsspecial(input)) {
@@ -178,16 +192,16 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
             return indeterminate;
         case header_value:
             if (input == '\r') {
-                if (req.method_ == "POST" || req.method_ == "PUT") {
+                if (req.method_ == "POST" || req.method_ == "PUT" || req.method_ == "PATCH") {
                     Header &h = req.headers_.back();
 
                     if (strcasecmp(h.name_.c_str(), "Content-Length") == 0) {
-                        req.bodySize_ = atoi(h.value_.c_str());
-                        contentSize_ = std::min(req.maxContentSize_, req.bodySize_);
-                        req.content_.reserve(contentSize_);
+                        contentSize_ = atoi(h.value_.c_str());
+                        req.bodySize_ = contentSize_;
+                        contentSize_ = std::min(content.capacity(), contentSize_);
                     } else if (strcasecmp(h.name_.c_str(), "Transfer-Encoding") == 0) {
                         if (strcasecmp(h.value_.c_str(), "chunked") == 0) {
-                            chunked_ = true;
+                            return bad;
                         }
                     }
                 }
@@ -224,128 +238,25 @@ RequestParser::result_type RequestParser::consume(Request &req, char input) {
                 }
             }
 
-            if (chunked_) {
-                state_ = chunk_size;
-            } else if (contentSize_ == 0) {
+            if (contentSize_ == 0) {
                 if (input == '\n') {
                     return good_complete;
                 } else {
                     return bad;
                 }
             } else {
+                content.clear();
+                req.noInitialBodyBytesReceived_ = 0;
                 state_ = post;
             }
             return indeterminate;
         }
         case post:
             --contentSize_;
-            req.content_.push_back(input);
+            req.noInitialBodyBytesReceived_++;
+            content.push_back(input);
             if (contentSize_ == 0) {
-                if (req.maxContentSize_ < req.bodySize_) {
-                    return good_part;
-                }
                 return good_complete;
-            }
-            return indeterminate;
-        case chunk_size:
-            if (isalnum(input)) {
-                chunkSizeStr_.push_back(input);
-            } else if (input == ';') {
-                state_ = chunk_extension_name;
-            } else if (input == '\r') {
-                state_ = chunk_size_newline;
-            } else {
-                return bad;
-            }
-            return indeterminate;
-        case chunk_extension_name:
-            if (isalnum(input) || input == ' ') {
-                // skip
-            } else if (input == '=') {
-                state_ = chunk_extension_value;
-            } else if (input == '\r') {
-                state_ = chunk_size_newline;
-            } else {
-                return bad;
-            }
-            return indeterminate;
-        case chunk_extension_value:
-            if (isalnum(input) || input == ' ') {
-                // skip
-            } else if (input == '\r') {
-                state_ = chunk_size_newline;
-            } else {
-                return bad;
-            }
-            return indeterminate;
-        case chunk_size_newline:
-            if (input == '\n') {
-                chunkSize_ = strtol(chunkSizeStr_.c_str(), NULL, 16);
-                chunkSizeStr_.clear();
-                // TODO: chunked request do not honor req.maxContentSize_
-                req.content_.reserve(req.content_.size() + chunkSize_);
-
-                if (chunkSize_ == 0) {
-                    state_ = chunk_size_newline_2;
-                } else {
-                    state_ = chunk_data;
-                }
-            } else {
-                return bad;
-            }
-            return indeterminate;
-        case chunk_size_newline_2:
-            if (input == '\r') {
-                state_ = chunk_size_newline_3;
-            } else if (isalpha(input)) {
-                state_ = chunk_trailer_name;
-            } else {
-                return bad;
-            }
-            return indeterminate;
-        case chunk_size_newline_3:
-            if (input == '\n') {
-                return good_complete;
-            } else {
-                return bad;
-            }
-            return indeterminate;
-        case chunk_trailer_name:
-            if (isalnum(input)) {
-                // skip
-            } else if (input == ':') {
-                state_ = chunk_trailer_value;
-            } else {
-                return bad;
-            }
-            return indeterminate;
-        case chunk_trailer_value:
-            if (isalnum(input) || input == ' ') {
-                // skip
-            } else if (input == '\r') {
-                state_ = chunk_size_newline;
-            } else {
-                return bad;
-            }
-            return indeterminate;
-        case chunk_data:
-            req.content_.push_back(input);
-            if (--chunkSize_ == 0) {
-                state_ = chunk_data_newline_1;
-            }
-            return indeterminate;
-        case chunk_data_newline_1:
-            if (input == '\r') {
-                state_ = chunk_data_newline_2;
-            } else {
-                return bad;
-            }
-            return indeterminate;
-        case chunk_data_newline_2:
-            if (input == '\n') {
-                state_ = chunk_size;
-            } else {
-                return bad;
             }
             return indeterminate;
         default:
