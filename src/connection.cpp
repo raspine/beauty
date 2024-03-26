@@ -36,6 +36,12 @@ void Connection::doRead() {
         asio::buffer(buffer_), [this, self](std::error_code ec, std::size_t bytesTransferred) {
             if (!ec) {
                 buffer_.resize(bytesTransferred);
+                std::cout << "Recv buffer size: " << bytesTransferred << std::endl;
+                std::cout << "Recv buffer:" << std::endl;
+                for (int i = 0; i < buffer_.size(); ++i) {
+                    printf("%c", buffer_[i]);
+                }
+                puts("end");
                 RequestParser::result_type result = requestParser_.parse(request_, buffer_);
 
                 if (result == RequestParser::good_complete) {

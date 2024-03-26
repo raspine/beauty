@@ -59,7 +59,7 @@ MultiPartParser::result_type MultiPartParser::parse(const Request &req,
     }
 
     // if no filename_/start_/end_ was found in consume() it will not create
-    // a part, so must then assume we're in the middle of content somwhere and
+    // a part, so must then assume we're in the middle of content somewhere and
     // create a part
     if (result == indeterminate && parts.empty()) {
         parts.push_back(ContentPart());
@@ -201,7 +201,6 @@ MultiPartParser::result_type MultiPartParser::consume(std::vector<char>::iterato
                         }
                         parts.back().filename_ = h.value_.substr(
                             foundStart + key.size(), foundEnd - foundStart - key.size());
-                        headers_.clear();
                     } else {
                         return bad;
                     }

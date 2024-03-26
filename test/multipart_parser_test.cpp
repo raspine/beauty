@@ -76,7 +76,7 @@ TEST_CASE("parse single part content", "[multipart_parser]") {
     }
 }
 
-TEST_CASE("parse multi part content", "[multipart_parser]") {
+TEST_CASE("parse multi-part content", "[multipart_parser]") {
     MultiPartParser parser;
     Request request;
     request.headers_.push_back({"From", "user@example.com"});
@@ -121,6 +121,39 @@ TEST_CASE("parse multi part content", "[multipart_parser]") {
         REQUIRE(*result[1].start_ == 'S');
         REQUIRE(result[0].foundEnd_);
         REQUIRE(*(result[1].end_ - 1) == '!');
+    }
+}
+
+TEST_CASE("parse until start of content", "[multipart_parser]") {
+    MultiPartParser parser;
+    Request request;
+    request.headers_.push_back({"From", "user@example.com"});
+    request.headers_.push_back(
+        {"Content-Type",
+         "multipart/form-data; boundary=--------------------------113720759424288166456951"});
+    request.headers_.push_back({"Content-Length", "224"});
+    REQUIRE(parser.parseHeader(request));  // make sure boundary is set
+
+    const std::string contentStr =
+        "----------------------------113720759424288166456951\r\nContent-Disposition: form-data; "
+        "name=\"file1\"; filename=\"firstpart.txt\"Content-Type: text/plain\r\n\r\n";
+    std::vector<char> content = convertToCharVec(contentStr);
+
+    SECTION("should return start and end not found") {
+        std::deque<MultiPartParser::ContentPart> result;
+        // getting back the initial empty result
+        REQUIRE(parser.parse(request, content, result) ==
+                MultiPartParser::result_type::indeterminate);
+        REQUIRE(result.size() == 0);
+
+        // result==done so call flush
+        parser.flush(content, result);
+        REQUIRE(result.size() == 1);
+        REQUIRE(result[0].filename_ == "firstpart.txt");
+        REQUIRE(!result[0].foundStart_);
+        REQUIRE(!result[0].foundEnd_);
+        REQUIRE(result[0].start_ == content.end());
+        REQUIRE(result[0].end_ == content.end());
     }
 }
 

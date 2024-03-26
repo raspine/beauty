@@ -48,18 +48,6 @@ void RequestHandler::handleRequest(unsigned connectionId,
                                    const Request &req,
                                    std::vector<char> &content,
                                    Reply &rep) {
-    std::cout << std::endl;
-    std::cout << req.uri_ << std::endl;
-    std::cout << req.method_ << std::endl;
-    std::cout << "################# body size" << content.size() << std::endl;
-    for (int i = 0; i < content.size(); ++i) {
-        printf("%c", content[i]);
-    }
-    puts("");
-    for (const auto &header : req.headers_) {
-        std::cout << header.name_ << " " << header.value_ << std::endl;
-    }
-
     // initiate filePath with requestPath
     rep.filePath_ = req.requestPath_;
 
@@ -103,6 +91,11 @@ void RequestHandler::handlePartialWrite(unsigned connectionId,
                                         std::vector<char> &content,
                                         Reply &rep) {
     std::deque<MultiPartParser::ContentPart> parts;
+    std::cout << "sp" << content.size() << "\n";
+    for (int i = 0; i < content.size(); ++i) {
+        printf("%c", content[i]);
+    }
+    std::cout << "end content\n";
     MultiPartParser::result_type result = multiPartParser_.parse(req, content, parts);
 
     if (result == MultiPartParser::result_type::bad) {
