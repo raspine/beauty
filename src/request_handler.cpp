@@ -170,7 +170,14 @@ void RequestHandler::writeFileParts(unsigned connectionId,
                                     const Request &req,
                                     Reply &rep,
                                     std::deque<MultiPartParser::ContentPart> &parts) {
-    std::cout << "parts size: " << parts.size() << std::endl;
+    std::cout << "***********parts********" << std::endl;
+    for (auto &part : parts) {
+        std::cout << "filename: " << part.filename_ << std::endl;
+        std::cout << "headerOnly: " << part.headerOnly_ << std::endl;
+        std::cout << "foundStart: " << part.foundStart_ << std::endl;
+        std::cout << "foundEnd: " << part.foundEnd_ << std::endl;
+        std::cout << "--------------------\n";
+    }
     // It seems that most clients first deliver a "headerOnly" part of the multipart
     // asking for confirmation and then in successive request deliver the part
     // data. If so, we handle this nicely here by giving the client an
@@ -178,6 +185,14 @@ void RequestHandler::writeFileParts(unsigned connectionId,
     // requires "peaking" the last part as the MultiPartParser delivers parts
     // one request too late.
     const std::deque<MultiPartParser::ContentPart> &peakParts = rep.multiPartParser_.peakLastPart();
+    std::cout << "*********** peak parts********" << std::endl;
+    for (auto &part : peakParts) {
+        std::cout << "filename: " << part.filename_ << std::endl;
+        std::cout << "headerOnly: " << part.headerOnly_ << std::endl;
+        std::cout << "foundStart: " << part.foundStart_ << std::endl;
+        std::cout << "foundEnd: " << part.foundEnd_ << std::endl;
+        std::cout << "--------------------\n";
+    }
     for (auto &part : peakParts) {
         if (part.headerOnly_ && !part.filename_.empty()) {
             std::cout << "header only handled with peak\n";
