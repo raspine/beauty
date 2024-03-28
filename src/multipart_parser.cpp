@@ -116,6 +116,8 @@ MultiPartParser::result_type MultiPartParser::parse(const Request &req,
 void MultiPartParser::flush(std::vector<char> &content, std::deque<ContentPart> &parts) {
     parts.swap(lastParts_);
     content.swap(lastBuffer_);
+    lastParts_.clear();
+    lastBuffer_.clear();
 }
 
 const std::deque<MultiPartParser::ContentPart> &MultiPartParser::peakLastPart() const {

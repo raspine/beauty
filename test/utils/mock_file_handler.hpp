@@ -13,13 +13,13 @@ class MockFileHandler : public http::server::IFileHandler {
     MockFileHandler() = default;
     virtual ~MockFileHandler() = default;
 
-    virtual size_t openFileForRead(unsigned id, const std::string& path) override;
-    virtual void closeFile(unsigned id) override;
-    virtual int readFile(unsigned id, char* buf, size_t maxSize) override;
-    virtual http::server::Reply::status_type openFileForWrite(unsigned id,
+    virtual size_t openFileForRead(const std::string& id, const std::string& path) override;
+    virtual void closeFile(const std::string& id) override;
+    virtual int readFile(const std::string& id, char* buf, size_t maxSize) override;
+    virtual http::server::Reply::status_type openFileForWrite(const std::string& id,
                                                               const std::string& path,
                                                               std::string& err) override;
-    virtual http::server::Reply::status_type writeFile(unsigned id,
+    virtual http::server::Reply::status_type writeFile(const std::string& id,
                                                        const char* buf,
                                                        size_t size,
                                                        std::string& err) override;
@@ -38,8 +38,8 @@ class MockFileHandler : public http::server::IFileHandler {
         std::vector<char>::iterator readIt_;
         bool isOpen_ = false;
     };
-    std::unordered_map<unsigned, OpenFile> openReadFiles_;
-    std::unordered_map<unsigned, OpenFile> openWriteFiles_;
+    std::unordered_map<std::string, OpenFile> openReadFiles_;
+    std::unordered_map<std::string, OpenFile> openWriteFiles_;
     std::vector<char> mockFileData_;
     int countOpenFileForReadCalls_ = 0;
     int countOpenFileForWriteCalls_ = 0;

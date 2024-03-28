@@ -187,7 +187,7 @@ void Connection::shutdown() {
     std::error_code ignored_ec;
     socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ignored_ec);
     connectionManager_.stop(shared_from_this());
-    requestHandler_.closeFile(connectionId_);
+    requestHandler_.closeFile(reply_, connectionId_);
 }
 
 }  // namespace server

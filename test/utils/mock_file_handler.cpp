@@ -1,6 +1,7 @@
 #include "mock_file_handler.hpp"
 
 #include <cstring>
+#include <iostream>
 #include <limits>
 #include <stdexcept>
 
@@ -15,7 +16,7 @@ bool ends_with(std::string const& value, std::string const& ending) {
 }
 }
 
-size_t MockFileHandler::openFileForRead(unsigned id, const std::string& path) {
+size_t MockFileHandler::openFileForRead(const std::string& id, const std::string& path) {
     OpenFile& openFile = openReadFiles_[id];
     countOpenFileForReadCalls_++;
     if (openFile.isOpen_) {
@@ -31,12 +32,12 @@ size_t MockFileHandler::openFileForRead(unsigned id, const std::string& path) {
     return mockFileData_.size();
 }
 
-void MockFileHandler::closeFile(unsigned id) {
+void MockFileHandler::closeFile(const std::string& id) {
     countCloseFileCalls_++;
     openReadFiles_.erase(id);
 }
 
-int MockFileHandler::readFile(unsigned id, char* buf, size_t maxSize) {
+int MockFileHandler::readFile(const std::string& id, char* buf, size_t maxSize) {
     if (!openReadFiles_[id].isOpen_) {
         throw std::runtime_error("MockFileHandler test error: readFile() called on closed file");
     }
@@ -49,9 +50,10 @@ int MockFileHandler::readFile(unsigned id, char* buf, size_t maxSize) {
     return bytesToCopy;
 }
 
-http::server::Reply::status_type MockFileHandler::openFileForWrite(unsigned id,
+http::server::Reply::status_type MockFileHandler::openFileForWrite(const std::string& id,
                                                                    const std::string& path,
                                                                    std::string& err) {
+    std::cout << "openfileforWrite!!!!!!!!!!!!!!!!!!!!1\n";
     OpenFile& openFile = openWriteFiles_[id];
     countOpenFileForWriteCalls_++;
     if (mockFailToOpenWriteFile_) {
@@ -61,7 +63,7 @@ http::server::Reply::status_type MockFileHandler::openFileForWrite(unsigned id,
     return http::server::Reply::status_type::created;
 }
 
-http::server::Reply::status_type MockFileHandler::writeFile(unsigned id,
+http::server::Reply::status_type MockFileHandler::writeFile(const std::string& id,
                                                             const char* buf,
                                                             size_t size,
                                                             std::string& err) {

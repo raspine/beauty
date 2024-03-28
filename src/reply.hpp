@@ -20,8 +20,8 @@ class Reply {
     friend class Connection;
 
    public:
-    Reply(const Reply &) = delete;
-    Reply &operator=(const Reply &) = delete;
+    Reply(const Reply&) = delete;
+    Reply& operator=(const Reply&) = delete;
 
     Reply(size_t maxContentSize);
     virtual ~Reply() = default;
@@ -78,6 +78,8 @@ class Reply {
     int noBodyBytesReceived_ = -1;
     // keep track if the body is a multi-part upload
     bool isMultiPart_ = false;
+    // keep track of the last opened file in multi-part transferrs
+    std::string lastOpenFileForWriteId_;
 
     // parser to handle multipart uploads
     MultiPartParser multiPartParser_;

@@ -84,7 +84,7 @@ void RequestHandler::handlePartialRead(unsigned connectionId, Reply &rep) {
 
     if (nrReadBytes < rep.maxContentSize_) {
         rep.finalPart_ = true;
-        fileHandler_->closeFile(connectionId);
+        fileHandler_->closeFile(std::to_string(connectionId));
     }
 }
 
@@ -115,15 +115,18 @@ void RequestHandler::handlePartialWrite(unsigned connectionId,
     }
 }
 
-void RequestHandler::closeFile(unsigned connectionId) {
+void RequestHandler::closeFile(Reply &rep, unsigned connectionId) {
     if (fileHandler_ != nullptr) {
-        fileHandler_->closeFile(connectionId);
+        if (!rep.lastOpenFileForWriteId_.empty()) {
+            fileHandler_->closeFile(rep.lastOpenFileForWriteId_);
+        }
+        fileHandler_->closeFile(std::to_string(connectionId));
     }
 }
 
 bool RequestHandler::openAndReadFile(unsigned connectionId, const Request &req, Reply &rep) {
     // open the file to send back
-    size_t contentSize = fileHandler_->openFileForRead(connectionId, rep.filePath_);
+    size_t contentSize = fileHandler_->openFileForRead(std::to_string(connectionId), rep.filePath_);
     if (contentSize > 0) {
         // determine the file extension.
         std::string extension;
@@ -144,7 +147,7 @@ bool RequestHandler::openAndReadFile(unsigned connectionId, const Request &req, 
         readFromFile(connectionId, rep);
         if (!rep.replyPartial_) {
             // all data fits in initial content
-            fileHandler_->closeFile(connectionId);
+            fileHandler_->closeFile(std::to_string(connectionId));
         }
 
         rep.defaultHeaders_.resize(2);
@@ -160,8 +163,8 @@ bool RequestHandler::openAndReadFile(unsigned connectionId, const Request &req, 
 
 size_t RequestHandler::readFromFile(unsigned connectionId, Reply &rep) {
     rep.content_.resize(rep.maxContentSize_);
-    int nrReadBytes =
-        fileHandler_->readFile(connectionId, rep.content_.data(), rep.content_.size());
+    int nrReadBytes = fileHandler_->readFile(
+        std::to_string(connectionId), rep.content_.data(), rep.content_.size());
     rep.content_.resize(nrReadBytes);
     return nrReadBytes;
 }
@@ -170,14 +173,6 @@ void RequestHandler::writeFileParts(unsigned connectionId,
                                     const Request &req,
                                     Reply &rep,
                                     std::deque<MultiPartParser::ContentPart> &parts) {
-    std::cout << "***********parts********" << std::endl;
-    for (auto &part : parts) {
-        std::cout << "filename: " << part.filename_ << std::endl;
-        std::cout << "headerOnly: " << part.headerOnly_ << std::endl;
-        std::cout << "foundStart: " << part.foundStart_ << std::endl;
-        std::cout << "foundEnd: " << part.foundEnd_ << std::endl;
-        std::cout << "--------------------\n";
-    }
     // It seems that most clients first deliver a "headerOnly" part of the multipart
     // asking for confirmation and then in successive request deliver the part
     // data. If so, we handle this nicely here by giving the client an
@@ -196,27 +191,42 @@ void RequestHandler::writeFileParts(unsigned connectionId,
     for (auto &part : peakParts) {
         if (part.headerOnly_ && !part.filename_.empty()) {
             std::cout << "header only handled with peak\n";
-            std::string filePath = req.requestPath_ + peakParts[0].filename_;
+            std::string filePath = req.requestPath_ + part.filename_;
             std::string err;
-            rep.status_ = fileHandler_->openFileForWrite(connectionId, filePath, err);
+            rep.status_ = fileHandler_->openFileForWrite(
+                filePath + std::to_string(connectionId), filePath, err);
             if (rep.status_ != Reply::status_type::ok &&
                 rep.status_ != Reply::status_type::created) {
                 rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
                 return;
             }
-            return;
         }
+    }
+
+    std::cout << "***********parts********" << std::endl;
+    for (auto &part : parts) {
+        std::cout << "filename: " << part.filename_ << std::endl;
+        std::cout << "headerOnly: " << part.headerOnly_ << std::endl;
+        std::cout << "foundStart: " << part.foundStart_ << std::endl;
+        std::cout << "foundEnd: " << part.foundEnd_ << std::endl;
+        std::cout << "--------------------\n";
     }
 
     for (auto &part : parts) {
         std::string err;
         // if 'headerOnly' it as already been handled above
-        if (!part.headerOnly_) {
+        if (part.headerOnly_ && !part.filename_.empty()) {
+            std::string filePath = req.requestPath_ + part.filename_;
+            rep.lastOpenFileForWriteId_ = filePath + std::to_string(connectionId);
+            std::cout << "lastOpenFileForWriteId: " << rep.lastOpenFileForWriteId_ << std::endl;
+        } else {
             std::cout << "part contain data\n";
             if (!part.filename_.empty()) {
                 std::cout << "part contain filename\n";
                 std::string filePath = req.requestPath_ + part.filename_;
-                rep.status_ = fileHandler_->openFileForWrite(connectionId, filePath, err);
+                rep.lastOpenFileForWriteId_ = filePath + std::to_string(connectionId);
+                rep.status_ =
+                    fileHandler_->openFileForWrite(rep.lastOpenFileForWriteId_, filePath, err);
                 if (rep.status_ != Reply::status_type::ok &&
                     rep.status_ != Reply::status_type::created) {
                     rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
@@ -224,16 +234,19 @@ void RequestHandler::writeFileParts(unsigned connectionId,
                 }
             }
             size_t size = part.end_ - part.start_;
-            rep.status_ = fileHandler_->writeFile(connectionId, &(*part.start_), size, err);
+            rep.status_ =
+                fileHandler_->writeFile(rep.lastOpenFileForWriteId_, &(*part.start_), size, err);
             if (rep.status_ != Reply::status_type::ok &&
                 rep.status_ != Reply::status_type::created) {
-                fileHandler_->closeFile(connectionId);
+                fileHandler_->closeFile(rep.lastOpenFileForWriteId_);
+                rep.lastOpenFileForWriteId_.clear();
                 rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
                 return;
             }
             if (part.foundEnd_) {
-                std::cout << "foundEnd\n";
-                fileHandler_->closeFile(connectionId);
+                std::cout << "foundEnd: " << rep.lastOpenFileForWriteId_ << "\n";
+                fileHandler_->closeFile(rep.lastOpenFileForWriteId_);
+                rep.lastOpenFileForWriteId_.clear();
             }
         }
     }

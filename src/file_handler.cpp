@@ -1,5 +1,6 @@
 #include "file_handler.hpp"
 
+#include <iostream>
 #include <limits>
 
 namespace http {
@@ -7,7 +8,7 @@ namespace server {
 
 FileHandler::FileHandler(const std::string &docRoot) : docRoot_(docRoot) {}
 
-size_t FileHandler::openFileForRead(unsigned id, const std::string &path) {
+size_t FileHandler::openFileForRead(const std::string &id, const std::string &path) {
     std::string fullPath = docRoot_ + path;
     std::ifstream &is = openReadFiles_[id];
     is.open(fullPath.c_str(), std::ios::in | std::ios::binary);
@@ -22,33 +23,36 @@ size_t FileHandler::openFileForRead(unsigned id, const std::string &path) {
     return 0;
 }
 
-Reply::status_type FileHandler::openFileForWrite(unsigned id,
+Reply::status_type FileHandler::openFileForWrite(const std::string &id,
                                                  const std::string &path,
                                                  std::string &err) {
     // TODO: error handling
     std::string fullPath = docRoot_ + path;
+    std::cout << "openfileforwrite: " << fullPath << std::endl;
     std::ofstream &os = openWriteFiles_[id];
     os.open(fullPath.c_str(), std::ios::out | std::ios::binary);
     return Reply::status_type::ok;
 }
 
-void FileHandler::closeFile(unsigned id) {
+void FileHandler::closeFile(const std::string &id) {
+    std::cout << "closing fileId: " << id << std::endl;
     openReadFiles_[id].close();
     openReadFiles_.erase(id);
     openWriteFiles_[id].close();
     openWriteFiles_.erase(id);
 }
 
-int FileHandler::readFile(unsigned id, char *buf, size_t maxSize) {
+int FileHandler::readFile(const std::string &id, char *buf, size_t maxSize) {
     openReadFiles_[id].read(buf, maxSize);
     return openReadFiles_[id].gcount();
 }
 
-Reply::status_type FileHandler::writeFile(unsigned id,
+Reply::status_type FileHandler::writeFile(const std::string &id,
                                           const char *buf,
                                           size_t size,
                                           std::string &err) {
     // TODO: error handling
+    std::cout << "writing to fileId: " << id << std::endl;
     openWriteFiles_[id].write(buf, size);
     return Reply::status_type::ok;
 }

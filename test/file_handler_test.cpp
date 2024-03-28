@@ -23,49 +23,49 @@ TEST_CASE("file_handler.cpp", "[file_handler]") {
     FileHandler fh("./");
 
     SECTION("should open file") {
-        REQUIRE(fh.openFileForRead(0, "testfile.bin"));
+        REQUIRE(fh.openFileForRead("0", "testfile.bin"));
     }
     SECTION("should close file idempotent") {
-        fh.openFileForRead(0, "testfile.bin");
-        fh.closeFile(0);
-        fh.closeFile(0);
-        fh.closeFile(0);
+        fh.openFileForRead("0", "testfile.bin");
+        fh.closeFile("0");
+        fh.closeFile("0");
+        fh.closeFile("0");
     }
     SECTION("should provide correct size") {
-        size_t fileSize = fh.openFileForRead(0, "testfile.bin");
+        size_t fileSize = fh.openFileForRead("0", "testfile.bin");
         REQUIRE(fileSize == arr.size() * typeSize);
     }
     SECTION("should read chunks") {
-        fh.openFileForRead(0, "testfile.bin");
+        fh.openFileForRead("0", "testfile.bin");
         std::vector<uint32_t> readData(10);
 
-        fh.readFile(0, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("0", (char*)readData.data(), readData.size() * typeSize);
         std::vector<uint32_t> expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         REQUIRE(readData == expected);
 
-        fh.readFile(0, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("0", (char*)readData.data(), readData.size() * typeSize);
         expected = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         REQUIRE(readData == expected);
     }
     SECTION("should allow parallell reads") {
-        fh.openFileForRead(0, "testfile.bin");
+        fh.openFileForRead("0", "testfile.bin");
         std::vector<uint32_t> readData(10);
 
-        fh.readFile(0, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("0", (char*)readData.data(), readData.size() * typeSize);
 
-        fh.openFileForRead(1, "testfile.bin");
+        fh.openFileForRead("1", "testfile.bin");
 
-        fh.readFile(0, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("0", (char*)readData.data(), readData.size() * typeSize);
         std::vector<uint32_t> expected = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         REQUIRE(readData == expected);
 
-        fh.readFile(1, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("1", (char*)readData.data(), readData.size() * typeSize);
         expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         REQUIRE(readData == expected);
 
-        fh.closeFile(0);
+        fh.closeFile("0");
 
-        fh.readFile(1, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("1", (char*)readData.data(), readData.size() * typeSize);
         expected = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         REQUIRE(readData == expected);
     }
@@ -80,52 +80,52 @@ TEST_CASE("mock_file_handler.cpp", "[file_handler]") {
     fh.createMockFile(100 * typeSize);
 
     SECTION("should open file") {
-        REQUIRE(fh.openFileForRead(0, "testfile.bin"));
+        REQUIRE(fh.openFileForRead("0", "testfile.bin"));
     }
     SECTION("should throw if call open() when already opened") {
-        REQUIRE(fh.openFileForRead(0, "testfile.bin"));
-        REQUIRE_THROWS_AS(fh.openFileForRead(0, "testfile2.bin"), std::runtime_error);
+        REQUIRE(fh.openFileForRead("0", "testfile.bin"));
+        REQUIRE_THROWS_AS(fh.openFileForRead("0", "testfile2.bin"), std::runtime_error);
     }
     SECTION("should provide correct size") {
-        size_t fileSize = fh.openFileForRead(0, "testfile.bin");
+        size_t fileSize = fh.openFileForRead("0", "testfile.bin");
         REQUIRE(fileSize == arr.size() * typeSize);
     }
     SECTION("should throw if call read() before opened") {
         std::vector<uint32_t> readData(10);
-        REQUIRE_THROWS_AS(fh.readFile(0, (char*)readData.data(), readData.size() * typeSize),
+        REQUIRE_THROWS_AS(fh.readFile("0", (char*)readData.data(), readData.size() * typeSize),
                           std::runtime_error);
     }
     SECTION("should read chunks") {
-        fh.openFileForRead(0, "testfile.bin");
+        fh.openFileForRead("0", "testfile.bin");
         std::vector<uint32_t> readData(10);
 
-        fh.readFile(0, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("0", (char*)readData.data(), readData.size() * typeSize);
         std::vector<uint32_t> expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         REQUIRE(readData == expected);
 
-        fh.readFile(0, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("0", (char*)readData.data(), readData.size() * typeSize);
         expected = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         REQUIRE(readData == expected);
     }
     SECTION("should allow parallell reads") {
-        fh.openFileForRead(0, "testfile.bin");
+        fh.openFileForRead("0", "testfile.bin");
         std::vector<uint32_t> readData(10);
 
-        fh.readFile(0, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("0", (char*)readData.data(), readData.size() * typeSize);
 
-        fh.openFileForRead(1, "testfile.bin");
+        fh.openFileForRead("1", "testfile.bin");
 
-        fh.readFile(0, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("0", (char*)readData.data(), readData.size() * typeSize);
         std::vector<uint32_t> expected = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         REQUIRE(readData == expected);
 
-        fh.readFile(1, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("1", (char*)readData.data(), readData.size() * typeSize);
         expected = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
         REQUIRE(readData == expected);
 
-        fh.closeFile(0);
+        fh.closeFile("0");
 
-        fh.readFile(1, (char*)readData.data(), readData.size() * typeSize);
+        fh.readFile("1", (char*)readData.data(), readData.size() * typeSize);
         expected = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         REQUIRE(readData == expected);
     }
