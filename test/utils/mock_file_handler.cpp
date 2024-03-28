@@ -38,10 +38,10 @@ void MockFileHandler::closeFile(const std::string& id) {
 }
 
 int MockFileHandler::readFile(const std::string& id, char* buf, size_t maxSize) {
-    if (!openReadFiles_[id].isOpen_) {
+    OpenFile& openFile = openReadFiles_[id];
+    if (!openFile.isOpen_) {
         throw std::runtime_error("MockFileHandler test error: readFile() called on closed file");
     }
-    OpenFile& openFile = openReadFiles_[id];
     countReadFileCalls_++;
     size_t leftBytes = std::distance(openFile.readIt_, mockFileData_.end());
     size_t bytesToCopy = std::min(maxSize, leftBytes);
@@ -53,13 +53,16 @@ int MockFileHandler::readFile(const std::string& id, char* buf, size_t maxSize) 
 http::server::Reply::status_type MockFileHandler::openFileForWrite(const std::string& id,
                                                                    const std::string& path,
                                                                    std::string& err) {
-    std::cout << "openfileforWrite!!!!!!!!!!!!!!!!!!!!1\n";
     OpenFile& openFile = openWriteFiles_[id];
+    if (openFile.isOpen_) {
+        throw std::runtime_error("MockFileHandler test error: File already opened");
+    }
     countOpenFileForWriteCalls_++;
     if (mockFailToOpenWriteFile_) {
-        openReadFiles_.erase(id);
+        openWriteFiles_.erase(id);
         return http::server::Reply::status_type::internal_server_error;
     }
+    openFile.isOpen_ = true;
     return http::server::Reply::status_type::created;
 }
 
@@ -67,6 +70,10 @@ http::server::Reply::status_type MockFileHandler::writeFile(const std::string& i
                                                             const char* buf,
                                                             size_t size,
                                                             std::string& err) {
+    OpenFile& openFile = openWriteFiles_[id];
+    if (!openFile.isOpen_) {
+        throw std::runtime_error("MockFileHandler test error: writeFile() called on closed file");
+    }
     return http::server::Reply::status_type::ok;
 }
 

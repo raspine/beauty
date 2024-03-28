@@ -28,14 +28,12 @@ Reply::status_type FileHandler::openFileForWrite(const std::string &id,
                                                  std::string &err) {
     // TODO: error handling
     std::string fullPath = docRoot_ + path;
-    std::cout << "openfileforwrite: " << fullPath << std::endl;
     std::ofstream &os = openWriteFiles_[id];
     os.open(fullPath.c_str(), std::ios::out | std::ios::binary);
     return Reply::status_type::ok;
 }
 
 void FileHandler::closeFile(const std::string &id) {
-    std::cout << "closing fileId: " << id << std::endl;
     openReadFiles_[id].close();
     openReadFiles_.erase(id);
     openWriteFiles_[id].close();
@@ -52,7 +50,6 @@ Reply::status_type FileHandler::writeFile(const std::string &id,
                                           size_t size,
                                           std::string &err) {
     // TODO: error handling
-    std::cout << "writing to fileId: " << id << std::endl;
     openWriteFiles_[id].write(buf, size);
     return Reply::status_type::ok;
 }

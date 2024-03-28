@@ -80,6 +80,7 @@ class Reply {
     bool isMultiPart_ = false;
     // keep track of the last opened file in multi-part transferrs
     std::string lastOpenFileForWriteId_;
+    unsigned multiPartCounter_ = 0;
 
     // parser to handle multipart uploads
     MultiPartParser multiPartParser_;

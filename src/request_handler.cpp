@@ -94,7 +94,6 @@ void RequestHandler::handlePartialWrite(unsigned connectionId,
                                         Reply &rep) {
     std::deque<MultiPartParser::ContentPart> parts;
     MultiPartParser::result_type result = rep.multiPartParser_.parse(req, content, parts);
-    std::cout << "result: " << result << std::endl;
 
     if (result == MultiPartParser::result_type::bad) {
         rep.stockReply(Reply::status_type::bad_request);
@@ -180,21 +179,13 @@ void RequestHandler::writeFileParts(unsigned connectionId,
     // requires "peaking" the last part as the MultiPartParser delivers parts
     // one request too late.
     const std::deque<MultiPartParser::ContentPart> &peakParts = rep.multiPartParser_.peakLastPart();
-    std::cout << "*********** peak parts********" << std::endl;
-    for (auto &part : peakParts) {
-        std::cout << "filename: " << part.filename_ << std::endl;
-        std::cout << "headerOnly: " << part.headerOnly_ << std::endl;
-        std::cout << "foundStart: " << part.foundStart_ << std::endl;
-        std::cout << "foundEnd: " << part.foundEnd_ << std::endl;
-        std::cout << "--------------------\n";
-    }
     for (auto &part : peakParts) {
         if (part.headerOnly_ && !part.filename_.empty()) {
-            std::cout << "header only handled with peak\n";
             std::string filePath = req.requestPath_ + part.filename_;
             std::string err;
             rep.status_ = fileHandler_->openFileForWrite(
                 filePath + std::to_string(connectionId), filePath, err);
+            rep.multiPartCounter_++;
             if (rep.status_ != Reply::status_type::ok &&
                 rep.status_ != Reply::status_type::created) {
                 rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
@@ -203,30 +194,23 @@ void RequestHandler::writeFileParts(unsigned connectionId,
         }
     }
 
-    std::cout << "***********parts********" << std::endl;
-    for (auto &part : parts) {
-        std::cout << "filename: " << part.filename_ << std::endl;
-        std::cout << "headerOnly: " << part.headerOnly_ << std::endl;
-        std::cout << "foundStart: " << part.foundStart_ << std::endl;
-        std::cout << "foundEnd: " << part.foundEnd_ << std::endl;
-        std::cout << "--------------------\n";
-    }
-
+    // This loop actually writes data to files in sucessive order.
     for (auto &part : parts) {
         std::string err;
         // if 'headerOnly' it as already been handled above
         if (part.headerOnly_ && !part.filename_.empty()) {
             std::string filePath = req.requestPath_ + part.filename_;
             rep.lastOpenFileForWriteId_ = filePath + std::to_string(connectionId);
-            std::cout << "lastOpenFileForWriteId: " << rep.lastOpenFileForWriteId_ << std::endl;
         } else {
-            std::cout << "part contain data\n";
             if (!part.filename_.empty()) {
-                std::cout << "part contain filename\n";
+                // In case client did not issue "headerOnly", its OK, we open
+                // the file for writing here. However as we are one request too
+                // late, the response will be late too.
                 std::string filePath = req.requestPath_ + part.filename_;
                 rep.lastOpenFileForWriteId_ = filePath + std::to_string(connectionId);
                 rep.status_ =
                     fileHandler_->openFileForWrite(rep.lastOpenFileForWriteId_, filePath, err);
+                rep.multiPartCounter_++;
                 if (rep.status_ != Reply::status_type::ok &&
                     rep.status_ != Reply::status_type::created) {
                     rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
@@ -244,13 +228,11 @@ void RequestHandler::writeFileParts(unsigned connectionId,
                 return;
             }
             if (part.foundEnd_) {
-                std::cout << "foundEnd: " << rep.lastOpenFileForWriteId_ << "\n";
                 fileHandler_->closeFile(rep.lastOpenFileForWriteId_);
                 rep.lastOpenFileForWriteId_.clear();
             }
         }
     }
-    std::cout << "parts handled\n";
 }
 
 }  // namespace server

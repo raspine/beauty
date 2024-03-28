@@ -543,7 +543,7 @@ TEST_CASE("server with write filehandler", "[server]") {
 
         REQUIRE(res1.statusCode_ == 201);  // MockFileHandler::openFileForWrite returns 201
         REQUIRE(res2.statusCode_ == 201);  // MockFileHandler::openFileForWrite returns 201
-        // REQUIRE(res3.statusCode_ == 200);  // MockFileHandler::writeFile returns 200
+        REQUIRE(res3.statusCode_ == 200);  // MockFileHandler::writeFile returns 200
         REQUIRE(mockFileHandler.getOpenFileForWriteCalls() == 2);
         REQUIRE(mockFileHandler.getCloseFileCalls() == 2);
     }
