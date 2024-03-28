@@ -8,7 +8,8 @@
 namespace http {
 namespace server {
 
-MultiPartParser::MultiPartParser() : state_(expecting_hyphen_1) {}
+MultiPartParser::MultiPartParser(std::vector<char> &lastBuffer)
+    : state_(expecting_hyphen_1), lastBuffer_(lastBuffer) {}
 
 void MultiPartParser::reset() {
     state_ = expecting_hyphen_1;
@@ -44,6 +45,10 @@ MultiPartParser::result_type MultiPartParser::parse(const Request &req,
                                                     std::vector<char> &content,
                                                     std::deque<ContentPart> &parts) {
     result_type result;
+    if (content.empty()) {
+        return indeterminate;
+    }
+
     parts.clear();
     auto begin = content.begin();
     auto end = content.end();
@@ -78,8 +83,6 @@ MultiPartParser::result_type MultiPartParser::parse(const Request &req,
             lastPart.start_ = lastBuffer_.begin();
         }
 
-        // end_ (just like an iterator::end()) points to the character
-        // after the last character.
         // If end_ not found assume buffer end.
         if (!lastPart.foundEnd_) {
             lastPart.end_ = lastBuffer_.end();
@@ -113,6 +116,10 @@ MultiPartParser::result_type MultiPartParser::parse(const Request &req,
 void MultiPartParser::flush(std::vector<char> &content, std::deque<ContentPart> &parts) {
     parts.swap(lastParts_);
     content.swap(lastBuffer_);
+}
+
+const std::deque<MultiPartParser::ContentPart> &MultiPartParser::peakLastPart() const {
+    return lastParts_;
 }
 
 MultiPartParser::result_type MultiPartParser::consume(std::vector<char>::iterator inputPtr,
@@ -201,6 +208,7 @@ MultiPartParser::result_type MultiPartParser::consume(std::vector<char>::iterato
                         }
                         parts.back().filename_ = h.value_.substr(
                             foundStart + key.size(), foundEnd - foundStart - key.size());
+                        headers_.clear();
                     } else {
                         return bad;
                     }
@@ -222,6 +230,10 @@ MultiPartParser::result_type MultiPartParser::consume(std::vector<char>::iterato
             return indeterminate;
         case expecting_newline_3: {
             if (input == '\n') {
+                if (parts.empty()) {
+                    parts.push_back(ContentPart());
+                }
+                parts.back().headerOnly_ = true;
                 state_ = part_data_start;
             } else {
                 return bad;
@@ -232,13 +244,9 @@ MultiPartParser::result_type MultiPartParser::consume(std::vector<char>::iterato
             if (parts.empty()) {
                 parts.push_back(ContentPart());
             }
-            if (!parts.back().foundStart_) {
-                parts.back().start_ = inputPtr;
-                parts.back().foundStart_ = true;
-            } else {
-                parts.push_back(ContentPart());
-                parts.back().start_ = inputPtr;
-            }
+            parts.back().headerOnly_ = false;
+            parts.back().start_ = inputPtr;
+            parts.back().foundStart_ = true;
             state_ = part_data_cont;
             return indeterminate;
         case part_data_cont:
@@ -268,13 +276,8 @@ MultiPartParser::result_type MultiPartParser::consume(std::vector<char>::iterato
             if (parts.empty()) {
                 parts.push_back(ContentPart());
             }
-            if (!parts.back().foundEnd_) {
-                parts.back().end_ = inputPtr;
-                parts.back().foundEnd_ = true;
-            } else {
-                parts.push_back(ContentPart());
-                parts.back().end_ = inputPtr;
-            }
+            parts.back().end_ = inputPtr;
+            parts.back().foundEnd_ = true;
 
             if (input == '-') {
                 return done;

@@ -15,10 +15,35 @@ std::vector<char> convertToCharVec(const std::string &s) {
     return ret;
 }
 
+struct Fixture {
+    Fixture(size_t maxContentSize) : parser_(content_) {
+        content_.reserve(maxContentSize);
+    }
+    bool parseHeader(const Request &req) {
+        return parser_.parseHeader(req);
+    }
+    MultiPartParser::result_type parse(const Request &req,
+                                       std::vector<char> &content,
+                                       std::deque<MultiPartParser::ContentPart> &parts) {
+        return parser_.parse(req, content, parts);
+    }
+
+    void flush(std::vector<char> &content, std::deque<MultiPartParser::ContentPart> &parts) {
+        parser_.flush(content, parts);
+    }
+
+    const std::deque<MultiPartParser::ContentPart> &peakLastPart() const {
+        return parser_.peakLastPart();
+    }
+
+    std::vector<char> content_;
+    MultiPartParser parser_;
+};
+
 }  // namespace
 
 TEST_CASE("parse header", "[multipart_parser]") {
-    MultiPartParser parser;
+    Fixture fixture(1024);
     Request request;
 
     SECTION("should return OK when boundary is last") {
@@ -27,7 +52,7 @@ TEST_CASE("parse header", "[multipart_parser]") {
             {"Content-Type",
              "multipart/form-data; boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE"});
         request.headers_.push_back({"Content-Length", "281"});
-        REQUIRE(parser.parseHeader(request));
+        REQUIRE(fixture.parseHeader(request));
     }
     SECTION("should return OK when boundary is first") {
         request.headers_.push_back({"From", "user@example.com"});
@@ -35,18 +60,18 @@ TEST_CASE("parse header", "[multipart_parser]") {
             {"Content-Type",
              "boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE; multipart/form-data;"});
         request.headers_.push_back({"Content-Length", "281"});
-        REQUIRE(parser.parseHeader(request));
+        REQUIRE(fixture.parseHeader(request));
     }
 }
 
 TEST_CASE("parse single part content", "[multipart_parser]") {
-    MultiPartParser parser;
+    Fixture fixture(1024);
     Request request;
     request.headers_.push_back({"From", "user@example.com"});
     request.headers_.push_back(
         {"Content-Type", "multipart/form-data; boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE"});
     request.headers_.push_back({"Content-Length", "281"});
-    REQUIRE(parser.parseHeader(request));  // make sure boundary is set
+    REQUIRE(fixture.parseHeader(request));  // make sure boundary is set
 
     const std::string contentStr =
         "------WebKitFormBoundarylSu7ajtLodoq9XHE\r\n"
@@ -62,11 +87,11 @@ TEST_CASE("parse single part content", "[multipart_parser]") {
     SECTION("should return done for single parts") {
         // getting back the initial empty result
         std::deque<MultiPartParser::ContentPart> result;
-        REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::done);
+        REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::done);
         REQUIRE(result.size() == 0);
 
         // result==done so call flush
-        parser.flush(content, result);
+        fixture.flush(content, result);
         REQUIRE(result.size() == 1);
         REQUIRE(result[0].filename_ == "testfile01.txt");
         REQUIRE(result[0].foundStart_);
@@ -77,13 +102,13 @@ TEST_CASE("parse single part content", "[multipart_parser]") {
 }
 
 TEST_CASE("parse multi-part content", "[multipart_parser]") {
-    MultiPartParser parser;
+    Fixture fixture(1024);
     Request request;
     request.headers_.push_back({"From", "user@example.com"});
     request.headers_.push_back(
         {"Content-Type", "multipart/form-data; boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE"});
     request.headers_.push_back({"Content-Length", "358"});
-    REQUIRE(parser.parseHeader(request));  // make sure boundary is set
+    REQUIRE(fixture.parseHeader(request));  // make sure boundary is set
 
     const std::string contentStr =
         "------WebKitFormBoundarylSu7ajtLodoq9XHE\r\n"
@@ -104,11 +129,11 @@ TEST_CASE("parse multi-part content", "[multipart_parser]") {
     SECTION("should return done for multiple parts") {
         std::deque<MultiPartParser::ContentPart> result;
         // getting back the initial empty result
-        REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::done);
+        REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::done);
         REQUIRE(result.size() == 0);
 
         // result==done so call flush
-        parser.flush(content, result);
+        fixture.flush(content, result);
         REQUIRE(result.size() == 2);
         REQUIRE(result[0].filename_ == "testfile01.txt");
         REQUIRE(result[0].foundStart_);
@@ -125,14 +150,14 @@ TEST_CASE("parse multi-part content", "[multipart_parser]") {
 }
 
 TEST_CASE("parse until start of content", "[multipart_parser]") {
-    MultiPartParser parser;
+    Fixture fixture(1024);
     Request request;
     request.headers_.push_back({"From", "user@example.com"});
     request.headers_.push_back(
         {"Content-Type",
          "multipart/form-data; boundary=--------------------------113720759424288166456951"});
     request.headers_.push_back({"Content-Length", "224"});
-    REQUIRE(parser.parseHeader(request));  // make sure boundary is set
+    REQUIRE(fixture.parseHeader(request));  // make sure boundary is set
 
     const std::string contentStr =
         "----------------------------113720759424288166456951\r\nContent-Disposition: form-data; "
@@ -142,29 +167,52 @@ TEST_CASE("parse until start of content", "[multipart_parser]") {
     SECTION("should return start and end not found") {
         std::deque<MultiPartParser::ContentPart> result;
         // getting back the initial empty result
-        REQUIRE(parser.parse(request, content, result) ==
+        REQUIRE(fixture.parse(request, content, result) ==
                 MultiPartParser::result_type::indeterminate);
         REQUIRE(result.size() == 0);
 
         // result==done so call flush
-        parser.flush(content, result);
+        fixture.flush(content, result);
         REQUIRE(result.size() == 1);
         REQUIRE(result[0].filename_ == "firstpart.txt");
         REQUIRE(!result[0].foundStart_);
         REQUIRE(!result[0].foundEnd_);
-        REQUIRE(result[0].start_ == content.end());
-        REQUIRE(result[0].end_ == content.end());
+        REQUIRE(result[0].headerOnly_);
     }
 }
 
-TEST_CASE("parse empty part content", "[multipart_parser]") {
-    MultiPartParser parser;
+TEST_CASE("parse empty content", "[multipart_parser]") {
+    Fixture fixture(1024);
     Request request;
     request.headers_.push_back({"From", "user@example.com"});
     request.headers_.push_back(
         {"Content-Type", "multipart/form-data; boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE"});
     request.headers_.push_back({"Content-Length", "184"});
-    REQUIRE(parser.parseHeader(request));  // make sure boundary is set
+    REQUIRE(fixture.parseHeader(request));  // make sure boundary is set
+
+    std::vector<char> content;
+
+    SECTION("should return indeterminate") {
+        std::deque<MultiPartParser::ContentPart> result;
+        // getting back the initial empty result
+        REQUIRE(fixture.parse(request, content, result) ==
+                MultiPartParser::result_type::indeterminate);
+        REQUIRE(result.size() == 0);
+
+        // result==done so call flush
+        fixture.flush(content, result);
+        REQUIRE(result.size() == 0);
+    }
+}
+
+TEST_CASE("parse empty part content", "[multipart_parser]") {
+    Fixture fixture(1024);
+    Request request;
+    request.headers_.push_back({"From", "user@example.com"});
+    request.headers_.push_back(
+        {"Content-Type", "multipart/form-data; boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE"});
+    request.headers_.push_back({"Content-Length", "184"});
+    REQUIRE(fixture.parseHeader(request));  // make sure boundary is set
 
     const std::string contentStr =
         "------WebKitFormBoundarylSu7ajtLodoq9XHE\r\n"
@@ -179,11 +227,11 @@ TEST_CASE("parse empty part content", "[multipart_parser]") {
     SECTION("should return size = 0") {
         std::deque<MultiPartParser::ContentPart> result;
         // getting back the initial empty result
-        REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::done);
+        REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::done);
         REQUIRE(result.size() == 0);
 
         // result==done so call flush
-        parser.flush(content, result);
+        fixture.flush(content, result);
         REQUIRE(result.size() == 1);
         REQUIRE(result[0].filename_ == "empty.txt");
         REQUIRE(result[0].foundStart_);
@@ -193,13 +241,13 @@ TEST_CASE("parse empty part content", "[multipart_parser]") {
 }
 
 TEST_CASE("content start and end in consecutive buffers", "[multipart_parser]") {
-    MultiPartParser parser;
+    Fixture fixture(1024);
     Request request;
     request.headers_.push_back({"From", "user@example.com"});
     request.headers_.push_back(
         {"Content-Type", "multipart/form-data; boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE"});
     request.headers_.push_back({"Content-Length", "281"});
-    REQUIRE(parser.parseHeader(request));  // make sure boundary is set
+    REQUIRE(fixture.parseHeader(request));  // make sure boundary is set
 
     const std::string contentStr1 =
         "------WebKitFormBoundarylSu7ajtLodoq9XHE\r\nContent-Disposition: form-data; "
@@ -211,11 +259,21 @@ TEST_CASE("content start and end in consecutive buffers", "[multipart_parser]") 
 
     // getting back the initial empty result
     std::vector<char> content = convertToCharVec(contentStr1);
-    REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
+    REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
     REQUIRE(result.size() == 0);
 
+    // peaking the last part..
+    const std::deque<MultiPartParser::ContentPart> &peakParts = fixture.peakLastPart();
+    REQUIRE(peakParts.size() == 1);
+    REQUIRE(peakParts[0].filename_ == "testfile01.txt");
+    REQUIRE(peakParts[0].foundStart_);
+    REQUIRE(*peakParts[0].start_ == 'T');
+    REQUIRE(!peakParts[0].foundEnd_);
+    REQUIRE(*(peakParts[0].end_ - 1) == 'o');
+
+    // ..that is actually delivered in the next parse call
     content = convertToCharVec(contentStr2);
-    REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::done);
+    REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::done);
     REQUIRE(result.size() == 1);
     REQUIRE(result[0].filename_ == "testfile01.txt");
     REQUIRE(result[0].foundStart_);
@@ -224,7 +282,7 @@ TEST_CASE("content start and end in consecutive buffers", "[multipart_parser]") 
     REQUIRE(*(result[0].end_ - 1) == 'o');
 
     // result==done so call flush
-    parser.flush(content, result);
+    fixture.flush(content, result);
     REQUIRE(result.size() == 1);
     REQUIRE(result[0].filename_ == "");
     REQUIRE(!result[0].foundStart_);
@@ -234,13 +292,13 @@ TEST_CASE("content start and end in consecutive buffers", "[multipart_parser]") 
 }
 
 TEST_CASE("content end in next to last body part", "[multipart_parser]") {
-    MultiPartParser parser;
+    Fixture fixture(1024);
     Request request;
     request.headers_.push_back({"From", "user@example.com"});
     request.headers_.push_back(
         {"Content-Type", "multipart/form-data; boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE"});
     request.headers_.push_back({"Content-Length", "336"});
-    REQUIRE(parser.parseHeader(request));  // make sure boundary is set
+    REQUIRE(fixture.parseHeader(request));  // make sure boundary is set
 
     const std::string contentStr1 =
         "------WebKitFormBoundarylSu7ajtLodoq9XHE\r\nContent-Disposition: form-data; n";
@@ -255,26 +313,25 @@ TEST_CASE("content end in next to last body part", "[multipart_parser]") {
 
     // getting back the initial empty result
     std::vector<char> content = convertToCharVec(contentStr1);
-    REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
+    REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
     REQUIRE(result.size() == 0);
 
     // Note: Whenever no start or end is found, the multipart parser assumes
     // that we're in the middle of a large file and creates a result with
     // start/end to match the entire request.content_ buffer.
-    // However as this use case uses a very small maxContentSize (75), this
-    // situation happens here for the first body1.
+    // However as this use case uses very small contentStr's (75 chars), this
+    // situation happens here for the first contentStr1.
     // For real use cases it must be a requirement to ensure that we at least
-    // get the content start in the first content buffer. I.e. maxContentSize
-    // > some limit so content start is ensured to be included in "body1".
+    // get all the first multipart headers in the first content buffer.
     // So here we "overlook" this and get result.size() == 1, but really it
-    // should be 0. But to get '0', the code would need more logic that
-    // in practise doesn't make much sense.
+    // should be 0. But to get '0', the code would need more logic that in
+    // practise doesn't make much sense.
     content = convertToCharVec(contentStr2);
-    REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
+    REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
     REQUIRE(result.size() == 1);
 
     content = convertToCharVec(contentStr3);
-    REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
+    REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
     REQUIRE(result.size() == 1);
     REQUIRE(result[0].filename_ == "testfile01.txt");
     REQUIRE(result[0].foundStart_);
@@ -283,7 +340,7 @@ TEST_CASE("content end in next to last body part", "[multipart_parser]") {
     REQUIRE(*(result[0].end_ - 1) == 'o');
 
     content = convertToCharVec(contentStr4);
-    REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
+    REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
     REQUIRE(result.size() == 1);
     REQUIRE(result[0].filename_ == "");
     REQUIRE(!result[0].foundStart_);
@@ -292,7 +349,7 @@ TEST_CASE("content end in next to last body part", "[multipart_parser]") {
     REQUIRE(*(result[0].end_ - 1) == ' ');
 
     content = convertToCharVec(contentStr5);
-    REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::done);
+    REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::done);
     REQUIRE(result.size() == 1);
     REQUIRE(result[0].filename_ == "");
     REQUIRE(!result[0].foundStart_);
@@ -301,18 +358,18 @@ TEST_CASE("content end in next to last body part", "[multipart_parser]") {
     REQUIRE(*(result[0].end_ - 1) == '.');
 
     // result==done so call flush
-    parser.flush(content, result);
+    fixture.flush(content, result);
     REQUIRE(result.size() == 0);
 }
 
 TEST_CASE("content end in previous body part and last part contain content", "[multipart_parser]") {
-    MultiPartParser parser;
+    Fixture fixture(1024);
     Request request;
     request.headers_.push_back({"From", "user@example.com"});
     request.headers_.push_back(
         {"Content-Type", "multipart/form-data; boundary=----WebKitFormBoundarylSu7ajtLodoq9XHE"});
     request.headers_.push_back({"Content-Length", "336"});
-    REQUIRE(parser.parseHeader(request));  // make sure boundary is set
+    REQUIRE(fixture.parseHeader(request));  // make sure boundary is set
 
     const std::string contentStr1 =
         "------WebKitFormBoundarylSu7ajtLodoq9XHE\r\nContent-Disposition: form-data; "
@@ -332,11 +389,11 @@ TEST_CASE("content end in previous body part and last part contain content", "[m
 
     // getting back the initial empty result
     std::vector<char> content = convertToCharVec(contentStr1);
-    REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
+    REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::indeterminate);
     REQUIRE(result.size() == 0);
 
     content = convertToCharVec(contentStr2);
-    REQUIRE(parser.parse(request, content, result) == MultiPartParser::result_type::done);
+    REQUIRE(fixture.parse(request, content, result) == MultiPartParser::result_type::done);
     REQUIRE(result.size() == 2);
     REQUIRE(result[0].filename_ == "testfile01.txt");
     REQUIRE(result[0].foundStart_);
@@ -348,7 +405,7 @@ TEST_CASE("content end in previous body part and last part contain content", "[m
     REQUIRE(*(result[1].end_ - 1) == '!');
 
     // result==done so call flush
-    parser.flush(content, result);
+    fixture.flush(content, result);
     REQUIRE(result.size() == 1);
     REQUIRE(result[0].filename_ == "testfile03.txt");
     REQUIRE(result[0].foundStart_);

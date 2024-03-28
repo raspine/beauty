@@ -43,9 +43,6 @@ class RequestHandler {
                         Reply &rep,
                         std::deque<MultiPartParser::ContentPart> &parts);
 
-    // parser to handle multipart uploads
-    MultiPartParser multiPartParser_;
-
     // Provided FileHandler to be implemented by each specific projects.
     IFileHandler *fileHandler_ = nullptr;
 

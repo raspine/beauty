@@ -16,14 +16,14 @@ bool ends_with(std::string const& value, std::string const& ending) {
 }
 
 size_t MockFileHandler::openFileForRead(unsigned id, const std::string& path) {
-    OpenFile& openFile = openFiles_[id];
-    countOpenFileCalls_++;
+    OpenFile& openFile = openReadFiles_[id];
+    countOpenFileForReadCalls_++;
     if (openFile.isOpen_) {
         throw std::runtime_error("MockFileHandler test error: File already opened");
     }
 
-    if (mockFailToOpenRequestedFile_) {
-        openFiles_.erase(id);
+    if (mockFailToOpenReadFile_) {
+        openReadFiles_.erase(id);
         return 0;
     }
     openFile.readIt_ = mockFileData_.begin();
@@ -33,14 +33,14 @@ size_t MockFileHandler::openFileForRead(unsigned id, const std::string& path) {
 
 void MockFileHandler::closeFile(unsigned id) {
     countCloseFileCalls_++;
-    openFiles_.erase(id);
+    openReadFiles_.erase(id);
 }
 
 int MockFileHandler::readFile(unsigned id, char* buf, size_t maxSize) {
-    if (!openFiles_[id].isOpen_) {
+    if (!openReadFiles_[id].isOpen_) {
         throw std::runtime_error("MockFileHandler test error: readFile() called on closed file");
     }
-    OpenFile& openFile = openFiles_[id];
+    OpenFile& openFile = openReadFiles_[id];
     countReadFileCalls_++;
     size_t leftBytes = std::distance(openFile.readIt_, mockFileData_.end());
     size_t bytesToCopy = std::min(maxSize, leftBytes);
@@ -52,13 +52,24 @@ int MockFileHandler::readFile(unsigned id, char* buf, size_t maxSize) {
 http::server::Reply::status_type MockFileHandler::openFileForWrite(unsigned id,
                                                                    const std::string& path,
                                                                    std::string& err) {
-    return http::server::Reply::status_type::not_implemented;
+    OpenFile& openFile = openWriteFiles_[id];
+    countOpenFileForWriteCalls_++;
+    if (mockFailToOpenWriteFile_) {
+        openReadFiles_.erase(id);
+        return http::server::Reply::status_type::internal_server_error;
+    }
+    return http::server::Reply::status_type::created;
 }
+
 http::server::Reply::status_type MockFileHandler::writeFile(unsigned id,
                                                             const char* buf,
                                                             size_t size,
                                                             std::string& err) {
-    return http::server::Reply::status_type::not_implemented;
+    return http::server::Reply::status_type::ok;
+}
+
+int MockFileHandler::getOpenFileForWriteCalls() {
+    return countOpenFileForWriteCalls_;
 }
 
 // creates and fills the "file" with counter values
@@ -79,12 +90,16 @@ void MockFileHandler::createMockFile(uint32_t size) {
     }
 }
 
-void MockFileHandler::setMockFailToOpenRequestedFile() {
-    mockFailToOpenRequestedFile_ = true;
+void MockFileHandler::setMockFailToOpenReadFile() {
+    mockFailToOpenReadFile_ = true;
 }
 
-int MockFileHandler::getOpenFileCalls() {
-    return countOpenFileCalls_;
+void MockFileHandler::setMockFailToOpenWriteFile() {
+    mockFailToOpenWriteFile_ = true;
+}
+
+int MockFileHandler::getOpenFileForReadCalls() {
+    return countOpenFileForReadCalls_;
 }
 
 int MockFileHandler::getReadFileCalls() {

@@ -19,6 +19,7 @@ Connection::Connection(asio::ip::tcp::socket socket,
       connectionManager_(manager),
       requestHandler_(handler),
       connectionId_(connectionId),
+      maxContentSize_(maxContentSize),
       buffer_(maxContentSize),
       reply_(maxContentSize) {}
 
@@ -31,17 +32,22 @@ void Connection::stop() {
 }
 
 void Connection::doRead() {
+    std::cout << "doReadBody\n";
     auto self(shared_from_this());
+    // asio uses buffer_.size() to limit amount of read data so must restore
+    // size before reading. Note: operation is "cheap" as maxContentSize is
+    // already reserved.
+    buffer_.resize(maxContentSize_);
     socket_.async_read_some(
         asio::buffer(buffer_), [this, self](std::error_code ec, std::size_t bytesTransferred) {
             if (!ec) {
                 buffer_.resize(bytesTransferred);
                 std::cout << "Recv buffer size: " << bytesTransferred << std::endl;
-                std::cout << "Recv buffer:" << std::endl;
+                std::cout << "#### Recv start ####" << std::endl;
                 for (int i = 0; i < buffer_.size(); ++i) {
                     printf("%c", buffer_[i]);
                 }
-                puts("end");
+                puts("#### Recv end ####");
                 RequestParser::result_type result = requestParser_.parse(request_, buffer_);
 
                 if (result == RequestParser::good_complete) {
@@ -49,20 +55,26 @@ void Connection::doRead() {
                         requestHandler_.handleRequest(connectionId_, request_, buffer_, reply_);
                         doWriteHeaders();
                     } else {
-                        reply_ = Reply::stockReply(Reply::bad_request);
+                        reply_.stockReply(Reply::bad_request);
                         doWriteHeaders();
                     }
                 } else if (result == RequestParser::good_part) {
                     if (requestDecoder_.decodeRequest(request_, buffer_)) {
                         reply_.noBodyBytesReceived_ = request_.getNoInitialBodyBytesReceived();
+                        std::cout << "Initial received body size: " << reply_.noBodyBytesReceived_
+                                  << std::endl;
                         requestHandler_.handleRequest(connectionId_, request_, buffer_, reply_);
-                        doReadBody();
+                        if (reply_.isMultiPart_) {
+                            doWritePartAck();
+                        } else {
+                            doReadBody();
+                        }
                     } else {
-                        reply_ = Reply::stockReply(Reply::bad_request);
+                        reply_.stockReply(Reply::bad_request);
                         doWriteHeaders();
                     }
                 } else if (result == RequestParser::bad) {
-                    reply_ = Reply::stockReply(Reply::bad_request);
+                    reply_.stockReply(Reply::bad_request);
                     doWriteHeaders();
                 } else {
                     doRead();
@@ -74,18 +86,40 @@ void Connection::doRead() {
         });
 }
 
+void Connection::doWritePartAck() {
+    std::cout << "doWritePartAck: " << reply_.status_ << "\n";
+    auto self(shared_from_this());
+    asio::async_write(
+        socket_, reply_.headerToBuffers(), [this, self](std::error_code ec, std::size_t) {
+            if (!ec) {
+                doReadBody();
+            } else {
+                std::cout << "doWritePartAck: " << ec.message() << ':' << ec.value() << std::endl;
+                shutdown();
+            }
+        });
+}
+
 void Connection::doReadBody() {
+    std::cout << "doReadBody\n";
+    buffer_.resize(maxContentSize_);
     auto self(shared_from_this());
     socket_.async_read_some(
         asio::buffer(buffer_), [this, self](std::error_code ec, std::size_t bytesTransferred) {
             if (!ec) {
                 buffer_.resize(bytesTransferred);
+                std::cout << "Recv buffer size: " << bytesTransferred << std::endl;
+                std::cout << "#### Recv start ####" << std::endl;
+                for (int i = 0; i < buffer_.size(); ++i) {
+                    printf("%c", buffer_[i]);
+                }
+                std::cout << "#### Recv end ####" << std::endl;
                 reply_.noBodyBytesReceived_ += bytesTransferred;
+                std::cout << "Received body size: " << reply_.noBodyBytesReceived_ << std::endl;
                 requestHandler_.handlePartialWrite(connectionId_, request_, buffer_, reply_);
                 if (reply_.status_ != Reply::status_type::ok) {
                     doWriteHeaders();
-                }
-                if (reply_.noBodyBytesReceived_ < request_.getBodySize()) {
+                } else if (reply_.noBodyBytesReceived_ < request_.getBodySize()) {
                     doReadBody();
                 } else {
                     doWriteHeaders();
@@ -98,6 +132,8 @@ void Connection::doReadBody() {
 }
 
 void Connection::doWriteHeaders() {
+    std::cout << "doWriteHeaders: " << reply_.status_ << "\n";
+
     auto self(shared_from_this());
     asio::async_write(
         socket_, reply_.headerToBuffers(), [this, self](std::error_code ec, std::size_t) {
@@ -115,6 +151,7 @@ void Connection::doWriteHeaders() {
 }
 
 void Connection::doWriteContent() {
+    std::cout << "doWriteContent\n";
     auto self(shared_from_this());
     asio::async_write(
         socket_, reply_.contentToBuffers(), [this, self](std::error_code ec, std::size_t) {
@@ -137,6 +174,7 @@ void Connection::doWriteContent() {
 }
 
 void Connection::handleWriteCompleted() {
+    std::cout << "handleWriteCompleted\n";
     // TODO: handle keep-alive
     // initiate graceful connection closure.
     std::error_code ignored_ec;

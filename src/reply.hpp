@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "header.hpp"
+#include "multipart_parser.hpp"
 
 namespace http {
 namespace server {
@@ -19,6 +20,9 @@ class Reply {
     friend class Connection;
 
    public:
+    Reply(const Reply &) = delete;
+    Reply &operator=(const Reply &) = delete;
+
     Reply(size_t maxContentSize);
     virtual ~Reply() = default;
 
@@ -45,7 +49,7 @@ class Reply {
     std::vector<char> content_;
 
     // Helper to provide standard replies
-    static Reply stockReply(status_type status);
+    void stockReply(status_type status);
 
     // File path to open.
     std::string filePath_;
@@ -72,6 +76,11 @@ class Reply {
 
     // keep track of the number of bytes received in request body
     int noBodyBytesReceived_ = -1;
+    // keep track if the body is a multi-part upload
+    bool isMultiPart_ = false;
+
+    // parser to handle multipart uploads
+    MultiPartParser multiPartParser_;
 
     // Convert the reply into a vector of buffers. The buffers do not own the
     // underlying memory blocks, therefore the reply object must remain valid

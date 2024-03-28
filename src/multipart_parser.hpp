@@ -16,7 +16,7 @@ struct Request;
 // Parser for incoming requests.
 class MultiPartParser {
    public:
-    MultiPartParser();
+    MultiPartParser(std::vector<char> &lastBuffer);
 
     // Reset to initial parser state.
     void reset();
@@ -28,6 +28,7 @@ class MultiPartParser {
         std::string filename_;
         std::vector<char>::iterator start_;
         std::vector<char>::iterator end_;
+        bool headerOnly_ = false;
         bool foundStart_ = false;
         bool foundEnd_ = false;
     };
@@ -45,6 +46,8 @@ class MultiPartParser {
                       std::deque<ContentPart> &parts);
 
     void flush(std::vector<char> &content, std::deque<ContentPart> &parts);
+
+    const std::deque<ContentPart> &peakLastPart() const;
 
    private:
     // Handle the next character of input.
@@ -83,7 +86,7 @@ class MultiPartParser {
     } state_;
 
     std::vector<Header> headers_;
-    std::vector<char> lastBuffer_;
+    std::vector<char> &lastBuffer_;
     std::deque<ContentPart> lastParts_;
 
     size_t contentCount_;

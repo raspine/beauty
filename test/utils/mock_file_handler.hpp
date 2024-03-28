@@ -25,9 +25,11 @@ class MockFileHandler : public http::server::IFileHandler {
                                                        std::string& err) override;
 
     void createMockFile(uint32_t size);
-    void setMockFailToOpenRequestedFile();
+    void setMockFailToOpenReadFile();
+    void setMockFailToOpenWriteFile();
 
-    int getOpenFileCalls();
+    int getOpenFileForReadCalls();
+    int getOpenFileForWriteCalls();
     int getReadFileCalls();
     int getCloseFileCalls();
 
@@ -36,11 +38,14 @@ class MockFileHandler : public http::server::IFileHandler {
         std::vector<char>::iterator readIt_;
         bool isOpen_ = false;
     };
-    std::unordered_map<unsigned, OpenFile> openFiles_;
+    std::unordered_map<unsigned, OpenFile> openReadFiles_;
+    std::unordered_map<unsigned, OpenFile> openWriteFiles_;
     std::vector<char> mockFileData_;
-    int countOpenFileCalls_ = 0;
+    int countOpenFileForReadCalls_ = 0;
+    int countOpenFileForWriteCalls_ = 0;
     int countReadFileCalls_ = 0;
     int countCloseFileCalls_ = 0;
-    bool mockFailToOpenRequestedFile_ = false;
+    bool mockFailToOpenReadFile_ = false;
+    bool mockFailToOpenWriteFile_ = false;
 };
 

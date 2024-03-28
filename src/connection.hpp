@@ -40,11 +40,10 @@ class Connection : public std::enable_shared_from_this<Connection> {
    private:
     // Perform an asynchronous read operation.
     void doRead();
-
-    // Perform an asynchronous read operation.
     void doReadBody();
 
     // Perform an asynchronous write operation.
+    void doWritePartAck();
     void doWriteHeaders();
     void doWriteContent();
 
@@ -77,6 +76,7 @@ class Connection : public std::enable_shared_from_this<Connection> {
     Reply reply_;
 
     unsigned connectionId_;
+    size_t maxContentSize_;
 };
 
 typedef std::shared_ptr<Connection> connection_ptr;

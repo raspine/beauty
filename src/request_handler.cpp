@@ -16,7 +16,7 @@ namespace server {
 namespace {
 
 void defaultFileNotFoundHandler(Reply &rep) {
-    rep = Reply::stockReply(Reply::not_found);
+    rep.stockReply(Reply::not_found);
 }
 
 void defaultAddFileHeaderHandler(std::vector<Header> &headers) {}
@@ -64,9 +64,11 @@ void RequestHandler::handleRequest(unsigned connectionId,
     }
 
     if (fileHandler_ != nullptr) {
-        if (req.method_ == "POST" && multiPartParser_.parseHeader(req)) {
+        if (req.method_ == "POST" && rep.multiPartParser_.parseHeader(req)) {
             rep.status_ = Reply::ok;
+            rep.isMultiPart_ = true;
             handlePartialWrite(connectionId, req, content, rep);
+            return;
         } else if (req.method_ == "GET") {
             if (openAndReadFile(connectionId, req, rep)) {
                 return;
@@ -91,12 +93,8 @@ void RequestHandler::handlePartialWrite(unsigned connectionId,
                                         std::vector<char> &content,
                                         Reply &rep) {
     std::deque<MultiPartParser::ContentPart> parts;
-    std::cout << "sp" << content.size() << "\n";
-    for (int i = 0; i < content.size(); ++i) {
-        printf("%c", content[i]);
-    }
-    std::cout << "end content\n";
-    MultiPartParser::result_type result = multiPartParser_.parse(req, content, parts);
+    MultiPartParser::result_type result = rep.multiPartParser_.parse(req, content, parts);
+    std::cout << "result: " << result << std::endl;
 
     if (result == MultiPartParser::result_type::bad) {
         rep.stockReply(Reply::status_type::bad_request);
@@ -106,8 +104,14 @@ void RequestHandler::handlePartialWrite(unsigned connectionId,
     writeFileParts(connectionId, req, rep, parts);
 
     if (result == MultiPartParser::result_type::done) {
-        multiPartParser_.flush(content, parts);
+        rep.multiPartParser_.flush(content, parts);
         writeFileParts(connectionId, req, rep, parts);
+    }
+
+    // done with content unless there's 'bad' messages that should be return to
+    // client
+    if (rep.status_ == Reply::status_type::ok) {
+        rep.content_.clear();
     }
 }
 
@@ -166,23 +170,59 @@ void RequestHandler::writeFileParts(unsigned connectionId,
                                     const Request &req,
                                     Reply &rep,
                                     std::deque<MultiPartParser::ContentPart> &parts) {
-    std::string err;
-    for (auto &part : parts) {
-        if (!part.filename_.empty()) {
-            std::string filePath = req.requestPath_ + part.filename_;
+    std::cout << "parts size: " << parts.size() << std::endl;
+    // It seems that most clients first deliver a "headerOnly" part of the multipart
+    // asking for confirmation and then in successive request deliver the part
+    // data. If so, we handle this nicely here by giving the client an
+    // headerOnly response of the openFileForWrite() response. However this
+    // requires "peaking" the last part as the MultiPartParser delivers parts
+    // one request too late.
+    const std::deque<MultiPartParser::ContentPart> &peakParts = rep.multiPartParser_.peakLastPart();
+    for (auto &part : peakParts) {
+        if (part.headerOnly_ && !part.filename_.empty()) {
+            std::cout << "header only handled with peak\n";
+            std::string filePath = req.requestPath_ + peakParts[0].filename_;
+            std::string err;
             rep.status_ = fileHandler_->openFileForWrite(connectionId, filePath, err);
-            if (rep.status_ != Reply::status_type::ok) {
-                fileHandler_->closeFile(connectionId);
+            if (rep.status_ != Reply::status_type::ok &&
+                rep.status_ != Reply::status_type::created) {
                 rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
+                return;
             }
-        }
-        size_t size = part.end_ - part.start_;
-        rep.status_ = fileHandler_->writeFile(connectionId, &(*part.start_), size, err);
-        if (rep.status_ != Reply::status_type::ok) {
-            fileHandler_->closeFile(connectionId);
-            rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
+            return;
         }
     }
+
+    for (auto &part : parts) {
+        std::string err;
+        // if 'headerOnly' it as already been handled above
+        if (!part.headerOnly_) {
+            std::cout << "part contain data\n";
+            if (!part.filename_.empty()) {
+                std::cout << "part contain filename\n";
+                std::string filePath = req.requestPath_ + part.filename_;
+                rep.status_ = fileHandler_->openFileForWrite(connectionId, filePath, err);
+                if (rep.status_ != Reply::status_type::ok &&
+                    rep.status_ != Reply::status_type::created) {
+                    rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
+                    return;
+                }
+            }
+            size_t size = part.end_ - part.start_;
+            rep.status_ = fileHandler_->writeFile(connectionId, &(*part.start_), size, err);
+            if (rep.status_ != Reply::status_type::ok &&
+                rep.status_ != Reply::status_type::created) {
+                fileHandler_->closeFile(connectionId);
+                rep.content_.insert(rep.content_.begin(), err.begin(), err.end());
+                return;
+            }
+            if (part.foundEnd_) {
+                std::cout << "foundEnd\n";
+                fileHandler_->closeFile(connectionId);
+            }
+        }
+    }
+    std::cout << "parts handled\n";
 }
 
 }  // namespace server
