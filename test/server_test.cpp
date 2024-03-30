@@ -431,7 +431,7 @@ TEST_CASE("server with write filehandler", "[server]") {
     uint16_t port = dut.getBindedPort();
     auto t = std::thread(&asio::io_context::run, &ioc);
 
-    SECTION("it should call fileHandler openFileForWrite for complete multipart request") {
+    SECTION("it should handle a complete multipart request") {
         // Note: It seems that clients typically post upto the end of each
         // multi-part header section, then make a new request for the file data
         // (First part). However this tests also checks that a complete post is
@@ -462,7 +462,38 @@ TEST_CASE("server with write filehandler", "[server]") {
         std::vector<char> expected = {'F', 'i', 'r', 's', 't', ' ', 'p', 'a', 'r', 't'};
         REQUIRE(result == expected);
     }
-    SECTION("it should call fileHandler openFileForWrite for divided multipart request") {
+    SECTION("it should handle divided multipart request with request headers only") {
+        const std::string request1 =
+            "POST / HTTP/1.1\r\n"
+            "Host: 127.0.0.1:8081\r\n"
+            "Accept-Encoding: gzip, deflate, br\r\n"
+            "Connection: keep-alive\r\n"
+            "Content-Type: multipart/form-data; "
+            "boundary=--------------------------338874100326900647006157\r\n"
+            "Content-Length: 222\r\n\r\n";
+        const std::string request2 =
+            "--------------------------338874100326900647006157\r\n"
+            "Content-Disposition: form-data; name=\"file1\"; filename=\"firstpart.txt\"\r\n"
+            "Content-Type: text/plain\r\n\r\n"
+            "First part\r\n\r\n----------------------------338874100326900647006157--\r\n";
+
+        openConnection(c, "127.0.0.1", port);
+
+        std::future<TestClient::TestResult> futs[2] = {createFutureResult(c),
+                                                       createFutureResult(c)};
+        c.sendMultiPartRequest({request1, request2});
+        auto res1 = futs[0].get();
+        auto res2 = futs[1].get();
+
+        REQUIRE(res1.statusCode_ == 200);  // Header response
+        REQUIRE(res2.statusCode_ == 200);  // MockFileHandler::writeFile returns 200
+        REQUIRE(mockFileHandler.getOpenFileForWriteCalls() == 1);
+        REQUIRE(mockFileHandler.getCloseFileCalls() == 1);
+        std::vector<char> result = mockFileHandler.getMockWriteFile("/firstpart.txt0");
+        std::vector<char> expected = {'F', 'i', 'r', 's', 't', ' ', 'p', 'a', 'r', 't'};
+        REQUIRE(result == expected);
+    }
+    SECTION("it should handle divided multipart request that includes initial part headers") {
         const std::string request1 =
             "POST / HTTP/1.1\r\n"
             "Host: 127.0.0.1:8081\r\n"
@@ -494,7 +525,7 @@ TEST_CASE("server with write filehandler", "[server]") {
         std::vector<char> expected = {'F', 'i', 'r', 's', 't', ' ', 'p', 'a', 'r', 't'};
         REQUIRE(result == expected);
     }
-    SECTION("it should respond with fileHandlers bad resoponse") {
+    SECTION("it should respond with fileHandlers bad response") {
         const std::string request1 =
             "POST / HTTP/1.1\r\n"
             "Host: 127.0.0.1:8081\r\n"
@@ -516,7 +547,7 @@ TEST_CASE("server with write filehandler", "[server]") {
         auto res = fut.get();
         REQUIRE(res.statusCode_ == 500);  // MockFileHandler::openFileForWrite
     }
-    SECTION("it should call fileHandler openFileForWrite for multiple multi-parts") {
+    SECTION("it should handle multiple parts in a multipart request") {
         const std::string request1 =
             "POST / HTTP/1.1\r\n"
             "Host: 127.0.0.1:8081\r\n"
