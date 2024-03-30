@@ -1,8 +1,5 @@
-#include "server.hpp"
-
 #include <catch2/catch_test_macros.hpp>
 #include <chrono>
-#include <csignal>
 #include <future>
 #include <numeric>
 #include <thread>
@@ -12,6 +9,7 @@
 #include "utils/mock_request_handler.hpp"
 #include "utils/test_client.hpp"
 
+#include "server.hpp"
 #include "request_handler.hpp"
 
 using namespace std::literals::chrono_literals;
@@ -460,6 +458,9 @@ TEST_CASE("server with write filehandler", "[server]") {
         REQUIRE(res.statusCode_ == 200);  // MockFileHandler::writeFile returns 200
         REQUIRE(mockFileHandler.getOpenFileForWriteCalls() == 1);
         REQUIRE(mockFileHandler.getCloseFileCalls() == 1);
+        std::vector<char> result = mockFileHandler.getMockWriteFile("/firstpart.txt0");
+        std::vector<char> expected = {'F', 'i', 'r', 's', 't', ' ', 'p', 'a', 'r', 't'};
+        REQUIRE(result == expected);
     }
     SECTION("it should call fileHandler openFileForWrite for divided multipart request") {
         const std::string request1 =
@@ -489,6 +490,9 @@ TEST_CASE("server with write filehandler", "[server]") {
         REQUIRE(res2.statusCode_ == 200);  // MockFileHandler::writeFile returns 200
         REQUIRE(mockFileHandler.getOpenFileForWriteCalls() == 1);
         REQUIRE(mockFileHandler.getCloseFileCalls() == 1);
+        std::vector<char> result = mockFileHandler.getMockWriteFile("/firstpart.txt0");
+        std::vector<char> expected = {'F', 'i', 'r', 's', 't', ' ', 'p', 'a', 'r', 't'};
+        REQUIRE(result == expected);
     }
     SECTION("it should respond with fileHandlers bad resoponse") {
         const std::string request1 =
@@ -546,6 +550,12 @@ TEST_CASE("server with write filehandler", "[server]") {
         REQUIRE(res3.statusCode_ == 200);  // MockFileHandler::writeFile returns 200
         REQUIRE(mockFileHandler.getOpenFileForWriteCalls() == 2);
         REQUIRE(mockFileHandler.getCloseFileCalls() == 2);
+        std::vector<char> result = mockFileHandler.getMockWriteFile("/firstpart.txt0");
+        std::vector<char> expected = {'F', 'i', 'r', 's', 't', ' ', 'p', 'a', 'r', 't', '.'};
+        REQUIRE(result == expected);
+        result = mockFileHandler.getMockWriteFile("/secondpart.txt0");
+        expected = {'S', 'e', 'c', 'o', 'n', 'd', ' ', 'p', 'a', 'r', 't', ','};
+        REQUIRE(result == expected);
     }
 
     ioc.stop();

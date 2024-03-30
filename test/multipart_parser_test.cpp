@@ -1,9 +1,6 @@
-#include "multipart_parser.hpp"
-
 #include <catch2/catch_test_macros.hpp>
-#include <iostream>
-#include <tuple>
 
+#include "multipart_parser.hpp"
 #include "request.hpp"
 
 using namespace http::server;

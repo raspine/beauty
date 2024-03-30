@@ -1,9 +1,8 @@
-#include "file_handler.hpp"
-
 #include <catch2/catch_test_macros.hpp>
 #include <fstream>
 #include <numeric>
 
+#include "file_handler.hpp"
 #include "utils/mock_file_handler.hpp"
 
 using namespace http::server;
@@ -71,7 +70,7 @@ TEST_CASE("file_handler.cpp", "[file_handler]") {
     }
 }
 
-TEST_CASE("mock_file_handler.cpp", "[file_handler]") {
+TEST_CASE("Reading from MockFileHandler", "[file_handler]") {
     std::vector<uint32_t> arr(100);
     size_t typeSize = sizeof(decltype(arr)::value_type);
     std::iota(arr.begin(), arr.end(), 0);
@@ -82,7 +81,7 @@ TEST_CASE("mock_file_handler.cpp", "[file_handler]") {
     SECTION("should open file") {
         REQUIRE(fh.openFileForRead("0", "testfile.bin"));
     }
-    SECTION("should throw if call open() when already opened") {
+    SECTION("should throw if call open() when already opened for read") {
         REQUIRE(fh.openFileForRead("0", "testfile.bin"));
         REQUIRE_THROWS_AS(fh.openFileForRead("0", "testfile2.bin"), std::runtime_error);
     }
@@ -107,7 +106,7 @@ TEST_CASE("mock_file_handler.cpp", "[file_handler]") {
         expected = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         REQUIRE(readData == expected);
     }
-    SECTION("should allow parallell reads") {
+    SECTION("should support parallel reads") {
         fh.openFileForRead("0", "testfile.bin");
         std::vector<uint32_t> readData(10);
 
@@ -128,5 +127,56 @@ TEST_CASE("mock_file_handler.cpp", "[file_handler]") {
         fh.readFile("1", (char*)readData.data(), readData.size() * typeSize);
         expected = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         REQUIRE(readData == expected);
+    }
+}
+
+TEST_CASE("Writing to MockFileHandler", "[file_handler]") {
+    MockFileHandler fh;
+    std::string err;
+
+    SECTION("should open file") {
+        REQUIRE(fh.openFileForWrite("0", "testfile.bin", err));
+    }
+    SECTION("should throw if call open() when already opened for write") {
+        REQUIRE(fh.openFileForWrite("0", "testfile.bin", err));
+        REQUIRE_THROWS_AS(fh.openFileForWrite("0", "testfile2.bin", err), std::runtime_error);
+    }
+    SECTION("should throw if call write() before opened") {
+        std::vector<uint32_t> writeData(10);
+        std::string err;
+        REQUIRE_THROWS_AS(fh.writeFile("0", (char*)writeData.data(), writeData.size(), err),
+                          std::runtime_error);
+    }
+    SECTION("should write chunks") {
+        std::string err;
+        fh.openFileForWrite("0", "testfile.bin", err);
+        std::vector<char> writeData1 = {'a', 'b', 'c', 'd', 'e'};
+
+        fh.writeFile("0", writeData1.data(), writeData1.size(), err);
+        std::vector<char> result = fh.getMockWriteFile("0");
+        REQUIRE(result == writeData1);
+
+        std::vector<char> writeData2 = {'f', 'g', 'h'};
+        fh.writeFile("0", writeData2.data(), writeData2.size(), err);
+        result = fh.getMockWriteFile("0");
+        writeData1.insert(writeData1.end(), writeData2.begin(), writeData2.end());
+        REQUIRE(result == writeData1);
+    }
+    SECTION("should support parallel writes") {
+        std::string err;
+        fh.openFileForWrite("0", "testfile.bin", err);
+        fh.openFileForWrite("1", "testfile.bin", err);
+
+        std::vector<char> writeData1 = {'a', 'b', 'c', 'd', 'e'};
+        std::vector<char> writeData2 = {'f', 'g', 'h'};
+
+        fh.writeFile("0", writeData1.data(), writeData1.size(), err);
+        fh.writeFile("1", writeData2.data(), writeData2.size(), err);
+
+        std::vector<char> result = fh.getMockWriteFile("0");
+        REQUIRE(result == writeData1);
+
+        result = fh.getMockWriteFile("1");
+        REQUIRE(result == writeData2);
     }
 }
