@@ -1,8 +1,7 @@
-#include "request_decoder.hpp"
-
 #include <catch2/catch_test_macros.hpp>
 
 #include "request.hpp"
+#include "request_decoder.hpp"
 
 using namespace http::server;
 

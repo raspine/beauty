@@ -1,8 +1,6 @@
-#include "request_handler.hpp"
-
-#include <iostream>
 #include <string>
 
+#include "request_handler.hpp"
 #include "beauty_common.hpp"
 #include "file_handler.hpp"
 #include "header.hpp"
@@ -194,7 +192,7 @@ void RequestHandler::writeFileParts(unsigned connectionId,
         }
     }
 
-    // This loop actually writes data to files in sucessive order.
+    // This loop do the actual writing of data to files in sucessive order.
     for (auto &part : parts) {
         std::string err;
         // if 'headerOnly' it as already been handled above

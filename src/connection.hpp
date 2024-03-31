@@ -1,7 +1,5 @@
 #pragma once
-// clang-format off
 #include "environment.hpp"
-// clang-format on
 
 #include <array>
 #include <asio.hpp>
@@ -75,7 +73,10 @@ class Connection : public std::enable_shared_from_this<Connection> {
     // The reply to be sent back to the client.
     Reply reply_;
 
+    // The unique id for the connection.
     unsigned connectionId_;
+
+    // The max buffer size when reading from socket.
     size_t maxContentSize_;
 };
 

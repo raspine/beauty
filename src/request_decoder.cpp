@@ -1,9 +1,9 @@
-#include "request_decoder.hpp"
-
 #include <algorithm>
 #include <cctype>
 #include <iostream>
 #include <sstream>
+
+#include "request_decoder.hpp"
 
 namespace http {
 namespace server {

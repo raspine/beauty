@@ -57,4 +57,3 @@ void FileStorageHandler::handleRequest(const Request &req, Reply &rep) {
 
 }  // namespace server
 }  // namespace http
-

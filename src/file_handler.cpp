@@ -33,13 +33,6 @@ Reply::status_type FileHandler::openFileForWrite(const std::string &id,
     return Reply::status_type::ok;
 }
 
-void FileHandler::closeFile(const std::string &id) {
-    openReadFiles_[id].close();
-    openReadFiles_.erase(id);
-    openWriteFiles_[id].close();
-    openWriteFiles_.erase(id);
-}
-
 int FileHandler::readFile(const std::string &id, char *buf, size_t maxSize) {
     openReadFiles_[id].read(buf, maxSize);
     return openReadFiles_[id].gcount();
@@ -52,6 +45,13 @@ Reply::status_type FileHandler::writeFile(const std::string &id,
     // TODO: error handling
     openWriteFiles_[id].write(buf, size);
     return Reply::status_type::ok;
+}
+
+void FileHandler::closeFile(const std::string &id) {
+    openReadFiles_[id].close();
+    openReadFiles_.erase(id);
+    openWriteFiles_[id].close();
+    openWriteFiles_.erase(id);
 }
 
 }  // namespace server

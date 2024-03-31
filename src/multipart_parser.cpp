@@ -1,9 +1,9 @@
-#include "multipart_parser.hpp"
-
 #include <string.h>
-
 #include <algorithm>
 #include <iostream>
+
+#include "parse_common.hpp"
+#include "multipart_parser.hpp"
 
 namespace http {
 namespace server {
@@ -45,6 +45,7 @@ MultiPartParser::result_type MultiPartParser::parse(const Request &req,
                                                     std::vector<char> &content,
                                                     std::deque<ContentPart> &parts) {
     result_type result;
+
     if (content.empty()) {
         return indeterminate;
     }
@@ -83,7 +84,7 @@ MultiPartParser::result_type MultiPartParser::parse(const Request &req,
             lastPart.start_ = lastBuffer_.begin();
         }
 
-        // If end_ not found assume buffer end.
+        // if end_ not found assume buffer end
         if (!lastPart.foundEnd_) {
             lastPart.end_ = lastBuffer_.end();
         } else {
@@ -99,8 +100,8 @@ MultiPartParser::result_type MultiPartParser::parse(const Request &req,
                 partToLeave.end_ = partToLeave.end_ - (lastPart.start_ - lastPart.end_);
                 partToLeave.foundEnd_ = true;
 
-                // This part needs removing as it was created
-                // by consume() but only contained end_ for previous part.
+                // this part needs removing as it was created
+                // by consume() but only contained end_ for previous part
                 containEndForPartToLeave = true;
             }
         }
@@ -296,45 +297,5 @@ MultiPartParser::result_type MultiPartParser::consume(std::vector<char>::iterato
     }
 }
 
-bool MultiPartParser::isChar(int c) {
-    return c >= 0 && c <= 127;
-}
-
-bool MultiPartParser::isCtl(int c) {
-    return (c >= 0 && c <= 31) || (c == 127);
-}
-
-bool MultiPartParser::isTsspecial(int c) {
-    switch (c) {
-        case '(':
-        case ')':
-        case '<':
-        case '>':
-        case '@':
-        case ',':
-        case ';':
-        case ':':
-        case '\\':
-        case '"':
-        case '/':
-        case '[':
-        case ']':
-        case '?':
-        case '=':
-        case '{':
-        case '}':
-        case ' ':
-        case '\t':
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool MultiPartParser::isDigit(int c) {
-    return c >= '0' && c <= '9';
-}
-
 }  // namespace server
 }  // namespace http
-

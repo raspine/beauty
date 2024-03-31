@@ -1,10 +1,9 @@
-#include "request_parser.hpp"
-
 #include <string.h>
-
 #include <algorithm>
 
+#include "parse_common.hpp"
 #include "request.hpp"
+#include "request_parser.hpp"
 
 namespace http {
 namespace server {
@@ -262,45 +261,6 @@ RequestParser::result_type RequestParser::consume(Request &req,
         default:
             return bad;
     }
-}
-
-bool RequestParser::isChar(int c) {
-    return c >= 0 && c <= 127;
-}
-
-bool RequestParser::isCtl(int c) {
-    return (c >= 0 && c <= 31) || (c == 127);
-}
-
-bool RequestParser::isTsspecial(int c) {
-    switch (c) {
-        case '(':
-        case ')':
-        case '<':
-        case '>':
-        case '@':
-        case ',':
-        case ';':
-        case ':':
-        case '\\':
-        case '"':
-        case '/':
-        case '[':
-        case ']':
-        case '?':
-        case '=':
-        case '{':
-        case '}':
-        case ' ':
-        case '\t':
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool RequestParser::isDigit(int c) {
-    return c >= '0' && c <= '9';
 }
 
 }  // namespace server

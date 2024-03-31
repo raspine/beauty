@@ -315,11 +315,11 @@ TEST_CASE("content end in next to last body part", "[multipart_parser]") {
 
     // Note: Whenever no start or end is found, the multipart parser assumes
     // that we're in the middle of a large file and creates a result with
-    // start/end to match the entire request.content_ buffer.
-    // However as this use case uses very small contentStr's (75 chars), this
-    // situation happens here for the first contentStr1.
-    // For real use cases it must be a requirement to ensure that we at least
-    // get all the first multipart headers in the first content buffer.
+    // start/end to match the entire request.content_ buffer. However as this
+    // use case uses very small contentStr's (75 chars), this situation happens
+    // here for the first contentStr1. For real use cases it must be
+    // a requirement that if receiving any body data in the first request, we
+    // at least get all the first multipart headers.
     // So here we "overlook" this and get result.size() == 1, but really it
     // should be 0. But to get '0', the code would need more logic that in
     // practise doesn't make much sense.

@@ -33,7 +33,7 @@ class MultiPartParser {
         bool foundEnd_ = false;
     };
 
-    // Return true if Content-Type is set to multipart
+    // Return true if Content-Type is set to multipart.
     bool parseHeader(const Request &req);
 
     // Parse multipart content. The enum return value is done when all parts
@@ -52,18 +52,6 @@ class MultiPartParser {
    private:
     // Handle the next character of input.
     result_type consume(std::vector<char>::iterator inputPtr, std::deque<ContentPart> &parts);
-
-    // Check if a byte is an HTTP character.
-    static bool isChar(int c);
-
-    // Check if a byte is an HTTP control character.
-    static bool isCtl(int c);
-
-    // Check if a byte is defined as an HTTP tspecial character.
-    static bool isTsspecial(int c);
-
-    // Check if a byte is a digit.
-    static bool isDigit(int c);
 
     // The current state of the parser.
     enum state {

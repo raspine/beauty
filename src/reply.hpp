@@ -1,7 +1,5 @@
 #pragma once
-// clang-format off
 #include "environment.hpp"
-// clang-format on
 
 #include <asio.hpp>
 #include <string>
@@ -48,7 +46,7 @@ class Reply {
     // Content to be sent in the reply.
     std::vector<char> content_;
 
-    // Helper to provide standard replies
+    // Helper to provide standard replies.
     void stockReply(status_type status);
 
     // File path to open.
@@ -69,20 +67,22 @@ class Reply {
     const char* contentPtr_ = nullptr;
     size_t contentSize_;
 
-    // for http chunking (using content-length, not "http chunking")
+    // Keep track when replying with successive write buffers.
     size_t maxContentSize_;
     bool replyPartial_ = false;
     bool finalPart_ = false;
 
-    // keep track of the number of bytes received in request body
+    // Keep track of the number of body bytes received in request body.
     int noBodyBytesReceived_ = -1;
-    // keep track if the body is a multi-part upload
+
+    // Keep track if the body is a multi-part upload.
     bool isMultiPart_ = false;
-    // keep track of the last opened file in multi-part transferrs
+
+    // Keep track of the last opened file in multi-part transfers.
     std::string lastOpenFileForWriteId_;
     unsigned multiPartCounter_ = 0;
 
-    // parser to handle multipart uploads
+    // Parser to handle multipart uploads.
     MultiPartParser multiPartParser_;
 
     // Convert the reply into a vector of buffers. The buffers do not own the

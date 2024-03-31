@@ -1,9 +1,8 @@
-#include "connection.hpp"
-
 #include <iostream>
 #include <utility>
 #include <vector>
 
+#include "connection.hpp"
 #include "connection_manager.hpp"
 #include "request_handler.hpp"
 
@@ -98,10 +97,15 @@ void Connection::doReadBody() {
             if (!ec) {
                 buffer_.resize(bytesTransferred);
                 reply_.noBodyBytesReceived_ += bytesTransferred;
-                unsigned multipartCounter = reply_.multiPartCounter_;
+
+                // As the receiving buffer is limited, keep track if we have
+                // opened a new multi-part file and should send an ack or if we
+                // just received file data for an already opened file.
+                unsigned multiPartCounter = reply_.multiPartCounter_;
+
                 requestHandler_.handlePartialWrite(connectionId_, request_, buffer_, reply_);
                 if (reply_.noBodyBytesReceived_ < request_.getBodySize()) {
-                    if (multipartCounter != reply_.multiPartCounter_) {
+                    if (multiPartCounter != reply_.multiPartCounter_) {
                         doWritePartAck();
                     } else {
                         doReadBody();

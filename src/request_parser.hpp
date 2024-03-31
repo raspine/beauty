@@ -28,18 +28,6 @@ class RequestParser {
     // Handle the next character of input.
     result_type consume(Request &req, std::vector<char> &content, char input);
 
-    // Check if a byte is an HTTP character.
-    static bool isChar(int c);
-
-    // Check if a byte is an HTTP control character.
-    static bool isCtl(int c);
-
-    // Check if a byte is defined as an HTTP tspecial character.
-    static bool isTsspecial(int c);
-
-    // Check if a byte is a digit.
-    static bool isDigit(int c);
-
     // The current state of the parser.
     enum state {
         method_start,

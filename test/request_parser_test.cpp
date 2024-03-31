@@ -1,9 +1,8 @@
-#include "request_parser.hpp"
-
 #include <catch2/catch_test_macros.hpp>
 #include <iostream>
 
 #include "request.hpp"
+#include "request_parser.hpp"
 
 using namespace http::server;
 
